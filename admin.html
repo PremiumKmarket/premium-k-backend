@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premium K · 관리자</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F4F5F7;margin:0;padding:16px;color:#1C2333;}
+h1{font-size:18px;color:#0B1B33;}
+.card{background:#fff;border:1px solid #E2E5EA;border-radius:12px;padding:14px;margin-bottom:12px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #E2E5EA;}
+button{background:#0B1B33;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;}
+button.danger{background:#B3261E;}
+input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;width:100%;margin-bottom:8px;box-sizing:border-box;}
+.pill{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;}
+.pill.approved{background:#E7F6EC;color:#1E7A46;}
+.pill.pending{background:#FFF3E9;color:#8A4B00;}
+#loginBox{max-width:320px;margin:60px auto;}
+</style>
+</head>
+<body>
+
+<div id="loginBox" class="card">
+  <h1>관리자 로그인</h1>
+  <input id="phone" placeholder="휴대폰 번호">
+  <input id="password" type="password" maxlength="6" placeholder="비밀번호 6자리">
+  <button onclick="adminLogin()" style="width:100%;padding:10px;">로그인</button>
+  <div id="loginErr" style="color:#B3261E;font-size:12px;margin-top:8px;"></div>
+</div>
+
+<div id="dashboard" style="display:none;">
+  <h1>Premium K 관리자</h1>
+
+  <div class="card">
+    <h2 style="font-size:14px;">회원 승인 관리</h2>
+    <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>상태</th><th>가입일</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">고객별 행동 조회</h2>
+    <input id="insightPhone" placeholder="전화번호로 검색 (숫자만)">
+    <button onclick="loadInsights()">조회</button>
+    <table id="insightTable" style="margin-top:10px;"><thead><tr><th>시각</th><th>행동</th><th>상품</th><th>상세</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">최근 30일 인기 상품 (조회/장바구니 기준)</h2>
+    <table id="topSkuTable"><thead><tr><th>SKU</th><th>행동</th><th>횟수</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">최근 30일 활발한 고객</h2>
+    <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://premium-k-backend.vercel.app/api';
+
+let token = localStorage.getItem('pk_token');
+
+async function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API_BASE + path, { ...options, headers });
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
+  return data;
+}
+
+async function adminLogin() {
+  const phone = document.getElementById('phone').value.trim();
+  const password = document.getElementById('password').value.trim();
+  try {
+    const data = await api('/auth/login', { method:'POST', body: JSON.stringify({ phone, password }) });
+    if (!data.isAdmin) { document.getElementById('loginErr').textContent = '관리자 계정이 아닙니다.'; return; }
+    token = data.token;
+    localStorage.setItem('pk_token', token);
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    loadUsers();
+    loadInsights();
+  } catch (e) {
+    document.getElementById('loginErr').textContent = e.message;
+  }
+}
+
+async function loadUsers() {
+  const data = await api('/admin/users');
+  const tbody = document.querySelector('#userTable tbody');
+  tbody.innerHTML = data.users.map(u => `
+    <tr>
+      <td>${u.phone}</td><td>${u.email||'—'}</td><td>${u.company_name||'—'}</td>
+      <td><span class="pill ${u.approved?'approved':'pending'}">${u.approved?'승인됨':'대기중'}</span></td>
+      <td>${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
+      <td>${u.approved
+        ? `<button class="danger" onclick="setApproved('${u.id}',false)">승인취소</button>`
+        : `<button onclick="setApproved('${u.id}',true)">승인</button>`}</td>
+    </tr>`).join('');
+}
+
+async function setApproved(userId, approved) {
+  await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, approved }) });
+  loadUsers();
+}
+
+async function loadInsights() {
+  const phone = document.getElementById('insightPhone').value.trim();
+  const data = await api('/admin/insights' + (phone ? `?phone=${encodeURIComponent(phone)}` : ''));
+  if (data.events) {
+    document.querySelector('#insightTable tbody').innerHTML = data.events.map(e => `
+      <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${e.event_type}</td><td>${e.sku||'—'}</td><td>${e.detail?JSON.stringify(e.detail):'—'}</td></tr>
+    `).join('');
+  }
+  if (data.topSkus) {
+    document.querySelector('#topSkuTable tbody').innerHTML = data.topSkus.map(r => `
+      <tr><td>${r.sku}</td><td>${r.event_type}</td><td>${r.n}</td></tr>
+    `).join('');
+  }
+  if (data.activeUsers) {
+    document.querySelector('#activeUserTable tbody').innerHTML = data.activeUsers.map(r => `
+      <tr><td>${r.phone}</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
+    `).join('');
+  }
+}
+
+if (token) {
+  document.getElementById('loginBox').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  loadUsers().catch(()=>{ localStorage.removeItem('pk_token'); location.reload(); });
+  loadInsights();
+}
+</script>
+</body>
+</html>
