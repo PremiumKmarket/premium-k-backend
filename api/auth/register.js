@@ -1,3 +1,4 @@
+// api/auth/register.js
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 
@@ -13,7 +14,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { phone, password, email, companyName } = req.body;
+    const { phone, password, email, companyName, address } = req.body;
 
     if (!phone || !/^[0-9]{9,15}$/.test(phone.replace(/[^0-9]/g, ''))) {
       return res.status(400).json({ error: 'INVALID_PHONE', message: '휴대폰 번호를 정확히 입력해주세요.' });
@@ -30,14 +31,14 @@ module.exports = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `INSERT INTO users (phone, password_hash, email, company_name, approved)
-       VALUES ($1,$2,$3,$4,false) RETURNING id, phone, approved`,
-      [cleanPhone, passwordHash, email || null, companyName || null]
+      `INSERT INTO users (phone, password_hash, email, company_name, address, approved)
+       VALUES ($1,$2,$3,$4,$5,false) RETURNING id, phone, approved`,
+      [cleanPhone, passwordHash, email || null, companyName || null, address || null]
     );
 
     await db.query(
       `INSERT INTO behavior_events (user_id, phone, event_type, detail) VALUES ($1,$2,'register',$3)`,
-      [rows[0].id, cleanPhone, JSON.stringify({ email })]
+      [rows[0].id, cleanPhone, JSON.stringify({ email, address })]
     );
 
     return res.status(201).json({
