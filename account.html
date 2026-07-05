@@ -123,7 +123,7 @@ async function requestReset(){
   const msgEl = document.getElementById('forgotMsg');
   msgEl.className = 'msg';
   try {
-    const data = await api('/auth/request-reset', { method:'POST', body: JSON.stringify({ phone }) });
+    const data = await api('/auth/reset', { method:'POST', body: JSON.stringify({ action: 'request', phone }) });
     msgEl.className = 'msg ok';
     msgEl.textContent = data.message;
   } catch (e) {
@@ -170,7 +170,7 @@ async function changePassword(){
   const msgEl = document.getElementById('pwMsg');
   msgEl.className = 'msg';
   try {
-    const data = await api('/account/change-password', { method:'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+    const data = await api('/account?resource=password', { method:'POST', body: JSON.stringify({ currentPassword, newPassword }) });
     msgEl.className = 'msg ok';
     msgEl.textContent = data.message;
     document.getElementById('curPw').value = '';
@@ -182,7 +182,7 @@ async function changePassword(){
 }
 
 async function loadAddresses(){
-  const data = await api('/account/addresses');
+  const data = await api('/account?resource=addresses');
   const el = document.getElementById('addrList');
   if (!data.addresses.length) { el.innerHTML = '<div style="font-size:12.5px;color:var(--text-2);">등록된 주소가 없습니다. No saved addresses yet.</div>'; return; }
   el.innerHTML = data.addresses.map(a => `
@@ -206,7 +206,7 @@ async function addAddress(){
   const msgEl = document.getElementById('addrMsg');
   msgEl.className = 'msg';
   try {
-    await api('/account/addresses', { method:'POST', body: JSON.stringify({ label, address, isDefault }) });
+    await api('/account?resource=addresses', { method:'POST', body: JSON.stringify({ label, address, isDefault }) });
     document.getElementById('newAddrLabel').value = '';
     document.getElementById('newAddrText').value = '';
     document.getElementById('newAddrDefault').checked = false;
@@ -220,18 +220,18 @@ async function addAddress(){
 }
 
 async function setDefaultAddress(id){
-  await api('/account/addresses', { method:'PATCH', body: JSON.stringify({ id, isDefault: true }) });
+  await api('/account?resource=addresses', { method:'PATCH', body: JSON.stringify({ id, isDefault: true }) });
   loadAddresses();
 }
 
 async function deleteAddress(id){
   if (!confirm('이 주소를 삭제할까요? Delete this address?')) return;
-  await api('/account/addresses', { method:'DELETE', body: JSON.stringify({ id }) });
+  await api('/account?resource=addresses', { method:'DELETE', body: JSON.stringify({ id }) });
   loadAddresses();
 }
 
 async function loadOrders(){
-  const data = await api('/account/orders');
+  const data = await api('/orders');
   const el = document.getElementById('orderList');
   if (!data.orders.length) { el.innerHTML = '<div style="font-size:12.5px;color:var(--text-2);">아직 주문 내역이 없습니다. No orders yet.</div>'; return; }
   el.innerHTML = data.orders.map((o, idx) => `
