@@ -50,10 +50,10 @@ async function submitReset(){
   }
 
   try {
-    const res = await fetch(API_BASE + '/auth/confirm-reset', {
+    const res = await fetch(API_BASE + '/auth/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword: p1 }),
+      body: JSON.stringify({ action: 'confirm', token, newPassword: p1 }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || data.error);
