@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premium K · 비밀번호 재설정 Reset Password</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F4F5F7;margin:0;padding:24px 16px;color:#1C2333;}
+.card{background:#fff;border:1px solid #E2E5EA;border-radius:14px;padding:20px;max-width:360px;margin:40px auto;}
+h1{font-size:17px;color:#0B1B33;margin-bottom:4px;}
+p.sub{font-size:12.5px;color:#5B6272;margin-bottom:16px;}
+input{border:1px solid #E2E5EA;border-radius:10px;padding:11px 12px;font-size:15px;width:100%;margin-bottom:10px;box-sizing:border-box;}
+button{background:#0B1B33;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;width:100%;cursor:pointer;}
+.msg{font-size:12.5px;margin-top:10px;text-align:center;}
+.msg.err{color:#B3261E;}
+.msg.ok{color:#1E7A46;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>비밀번호 재설정 Reset Password</h1>
+  <p class="sub">새 비밀번호(숫자 6자리)를 입력해주세요.<br>Enter a new 6-digit password.</p>
+  <input id="newPassword" type="password" maxlength="6" inputmode="numeric" placeholder="새 비밀번호 New password (6 digits)">
+  <input id="newPassword2" type="password" maxlength="6" inputmode="numeric" placeholder="비밀번호 확인 Confirm password">
+  <button onclick="submitReset()">비밀번호 변경 Change Password</button>
+  <div id="msg" class="msg"></div>
+</div>
+
+<script>
+const API_BASE = 'https://premium-k-backend.vercel.app/api';
+const params = new URLSearchParams(location.search);
+const token = params.get('token');
+
+async function submitReset(){
+  const msgEl = document.getElementById('msg');
+  msgEl.className = 'msg'; msgEl.textContent = '';
+
+  if (!token) {
+    msgEl.className = 'msg err';
+    msgEl.textContent = '재설정 링크가 올바르지 않습니다. Invalid reset link.';
+    return;
+  }
+  const p1 = document.getElementById('newPassword').value.trim();
+  const p2 = document.getElementById('newPassword2').value.trim();
+  if (p1 !== p2) {
+    msgEl.className = 'msg err';
+    msgEl.textContent = '비밀번호가 일치하지 않습니다. Passwords do not match.';
+    return;
+  }
+
+  try {
+    const res = await fetch(API_BASE + '/auth/confirm-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword: p1 }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error);
+    msgEl.className = 'msg ok';
+    msgEl.textContent = data.message + ' 이 창을 닫고 다시 로그인해주세요. You can close this and log in again.';
+  } catch (e) {
+    msgEl.className = 'msg err';
+    msgEl.textContent = e.message;
+  }
+}
+</script>
+</body>
+</html>
