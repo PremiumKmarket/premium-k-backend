@@ -1,9 +1,10 @@
+// api/admin/users.js
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
@@ -23,7 +24,7 @@ module.exports = async (req, res) => {
 
   if (req.method === 'GET') {
     const { rows } = await db.query(
-      `SELECT id, phone, email, company_name, approved, is_admin, created_at, approved_at
+      `SELECT id, phone, email, company_name, address, approved, is_admin, created_at, approved_at
        FROM users ORDER BY approved ASC, created_at DESC`
     );
     return res.json({ users: rows });
@@ -38,6 +39,17 @@ module.exports = async (req, res) => {
     );
     if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
     return res.json({ user: rows[0] });
+  }
+
+  if (req.method === 'DELETE') {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'MISSING_ID' });
+    if (userId === admin.id) {
+      return res.status(400).json({ error: 'CANNOT_DELETE_SELF', message: '본인 계정은 삭제할 수 없습니다.' });
+    }
+    const { rows } = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+    return res.status(204).end();
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
