@@ -5,6 +5,7 @@
   "dependencies": {
     "pg": "^8.11.5",
     "bcryptjs": "^2.4.3",
-    "stripe": "^15.0.0"
+    "stripe": "^15.0.0",
+    "node-fetch": "^2.7.0"
   }
 }
