@@ -71,16 +71,16 @@ module.exports = async (req, res) => {
     const { phone, password, email, companyName, address } = req.body;
 
     if (!phone || !/^[0-9]{9,15}$/.test(phone.replace(/[^0-9]/g, ''))) {
-      return res.status(400).json({ error: 'INVALID_PHONE', message: '휴대폰 번호를 정확히 입력해주세요.' });
+      return res.status(400).json({ error: 'INVALID_PHONE', message: '휴대폰 번호를 정확히 입력해주세요. Please enter a valid phone number.' });
     }
     if (!password || !/^[0-9]{6}$/.test(password)) {
-      return res.status(400).json({ error: 'INVALID_PASSWORD', message: '비밀번호는 숫자 6자리로 입력해주세요.' });
+      return res.status(400).json({ error: 'INVALID_PASSWORD', message: '비밀번호는 숫자 6자리로 입력해주세요. Password must be 6 digits.' });
     }
 
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const existing = await db.query('SELECT id FROM users WHERE phone = $1', [cleanPhone]);
     if (existing.rows.length) {
-      return res.status(409).json({ error: 'PHONE_EXISTS', message: '이미 등록된 휴대폰 번호입니다. 로그인해주세요.' });
+      return res.status(409).json({ error: 'PHONE_EXISTS', message: '이미 등록된 휴대폰 번호입니다. 로그인해주세요. This phone number is already registered. Please log in.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -101,11 +101,11 @@ module.exports = async (req, res) => {
     });
 
     return res.status(201).json({
-      message: '가입 신청이 접수되었습니다. 관리자 승인 후 가격 조회가 가능합니다.',
+      message: '가입 신청이 접수되었습니다. 관리자 승인 후 가격 조회가 가능합니다. Registration received. Prices will be visible once an admin approves your account.',
       approved: false,
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'SERVER_ERROR', message: '가입 처리 중 오류가 발생했습니다.' });
+    return res.status(500).json({ error: 'SERVER_ERROR', message: '가입 처리 중 오류가 발생했습니다. An error occurred during registration.' });
   }
 };
