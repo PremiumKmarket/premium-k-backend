@@ -1,3 +1,4 @@
+// api/auth/login.js
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 const { createSession } = require('../../lib/auth');
@@ -20,12 +21,12 @@ module.exports = async (req, res) => {
     const { rows } = await db.query('SELECT * FROM users WHERE phone = $1', [cleanPhone]);
     const user = rows[0];
     if (!user) {
-      return res.status(401).json({ error: 'NOT_FOUND', message: '등록되지 않은 휴대폰 번호입니다. 먼저 회원가입해주세요.' });
+      return res.status(401).json({ error: 'NOT_FOUND', message: '등록되지 않은 휴대폰 번호입니다. 먼저 회원가입해주세요. Phone number not found. Please register first.' });
     }
 
     const ok = await bcrypt.compare(password || '', user.password_hash);
     if (!ok) {
-      return res.status(401).json({ error: 'WRONG_PASSWORD', message: '비밀번호가 올바르지 않습니다.' });
+      return res.status(401).json({ error: 'WRONG_PASSWORD', message: '비밀번호가 올바르지 않습니다. Incorrect password.' });
     }
 
     const token = await createSession(user.id);
@@ -41,10 +42,10 @@ module.exports = async (req, res) => {
       email: user.email,
       companyName: user.company_name,
       isAdmin: user.is_admin,
-      message: user.approved ? '로그인되었습니다.' : '로그인되었습니다. 다만 아직 관리자 승인 전이라 가격은 승인 후에 보입니다.',
+      message: user.approved ? '로그인되었습니다. Logged in.' : '로그인되었습니다. 다만 아직 관리자 승인 전이라 가격은 승인 후에 보입니다. Logged in. Prices will be visible once an admin approves your account.',
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'SERVER_ERROR', message: '로그인 처리 중 오류가 발생했습니다.' });
+    return res.status(500).json({ error: 'SERVER_ERROR', message: '로그인 처리 중 오류가 발생했습니다. An error occurred while logging in.' });
   }
 };
