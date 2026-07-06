@@ -1,4 +1,5 @@
 // api/admin/users.js
+const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 
@@ -31,7 +32,22 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    const { userId, approved } = req.body;
+    const { userId, approved, newPassword } = req.body;
+
+    if (newPassword !== undefined) {
+      if (!/^[0-9]{6}$/.test(newPassword)) {
+        return res.status(400).json({ error: 'INVALID_PASSWORD', message: '비밀번호는 숫자 6자리여야 합니다.' });
+      }
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      const { rows } = await db.query(
+        'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, phone',
+        [passwordHash, userId]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      await db.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+      return res.json({ user: rows[0], message: '비밀번호가 재설정되었습니다.' });
+    }
+
     const { rows } = await db.query(
       `UPDATE users SET approved = $1, approved_at = CASE WHEN $1 THEN now() ELSE NULL END
        WHERE id = $2 RETURNING id, phone, approved`,
