@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
 
   if (req.method === 'GET') {
     const user = await getUserFromToken(getBearerToken(req));
-    if (!user) return res.status(401).json({ error: 'UNAUTHORIZED', message: '로그인이 필요합니다.' });
+    if (!user) return res.status(401).json({ error: 'UNAUTHORIZED', message: '로그인이 필요합니다. Login required.' });
     const { rows } = await db.query(
       `SELECT id, customer_name, address, rep_name, delivery_method, payment_method, items, total, order_text, created_at
        FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
