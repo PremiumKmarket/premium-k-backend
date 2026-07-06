@@ -98,6 +98,7 @@ async function loadUsers() {
         ${u.approved
           ? `<button class="danger" onclick="setApproved('${u.id}',false)">승인취소</button>`
           : `<button onclick="setApproved('${u.id}',true)">승인</button>`}
+        <button onclick="resetPassword('${u.id}','${u.phone}')" style="margin-left:6px;">비번재설정</button>
         <button class="danger" onclick="deleteUser('${u.id}','${u.phone}')" style="margin-left:6px;">삭제</button>
       </td>
     </tr>`).join('');
@@ -106,6 +107,23 @@ async function loadUsers() {
 async function setApproved(userId, approved) {
   await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, approved }) });
   loadUsers();
+}
+
+async function resetPassword(userId, phone) {
+  const autoPassword = String(Math.floor(100000 + Math.random() * 900000));
+  const newPassword = prompt(
+    `${phone} 고객의 새 비밀번호(숫자 6자리)를 입력하세요.\n그냥 확인만 누르면 자동 생성된 번호로 설정됩니다.`,
+    autoPassword
+  );
+  if (newPassword === null) return;
+  if (!/^[0-9]{6}$/.test(newPassword)) { alert('비밀번호는 숫자 6자리여야 합니다.'); return; }
+
+  try {
+    await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, newPassword }) });
+    alert(`비밀번호가 재설정되었습니다.\n\n고객 번호: ${phone}\n새 비밀번호: ${newPassword}\n\n이 번호를 고객에게 전화나 문자로 전달해주세요.`);
+  } catch (e) {
+    alert(e.message);
+  }
 }
 
 async function deleteUser(userId, phone) {
