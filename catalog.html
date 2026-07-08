@@ -184,6 +184,7 @@ async function createProduct(){
 }
 
 let allCats = [];
+let togoPageImages = {};
 async function loadProducts(){
   const cat = document.getElementById('catFilter').value;
   const search = document.getElementById('searchBox').value.trim();
@@ -191,6 +192,7 @@ async function loadProducts(){
   if (cat) params.set('cat', cat);
   if (search) params.set('search', search);
   const data = await api('/admin/products' + (params.toString() ? '?' + params.toString() : ''));
+  togoPageImages = data.togoPageImages || {};
 
   if (!cat && !search) {
     allCats = [...new Set(data.products.map(p => p.cat))].sort();
@@ -202,9 +204,11 @@ async function loadProducts(){
 
   document.getElementById('countBadge').textContent = `${data.products.length} items`;
   const el = document.getElementById('plist');
-  el.innerHTML = data.products.map(p => `
+  el.innerHTML = data.products.map(p => {
+    const resolvedImg = p.img || (p.imgPage ? togoPageImages[p.imgPage] : null);
+    return `
     <div class="prow" data-id="${p.id}">
-      ${p.img ? `<img src="${p.img}">` : `<div class="noimg">No photo</div>`}
+      ${resolvedImg ? `<img src="${resolvedImg}">` : `<div class="noimg">No photo</div>`}
       <div class="pfields">
         <div><label>SKU</label><input value="${p.sku}" disabled></div>
         <div><label>Category</label><input class="f-cat" value="${p.cat}"></div>
@@ -222,7 +226,8 @@ async function loadProducts(){
       </div>
       <div class="msg" id="rowmsg-${p.id}" style="display:none;"></div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 const rowImgData = {};
