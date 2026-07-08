@@ -1,11 +1,4 @@
 // api/products.js
-// Returns the full catalog. If the caller has a valid, APPROVED session,
-// real prices are included. Otherwise, prices are stripped and replaced
-// with a `locked: true` flag so the frontend can show the blinking
-// "로그인/회원가입 시 가격 확인 가능" prompt instead.
-
-const products = require('../data/products.json');
-const togoPageImages = require('../data/togo_page_images.json');
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const db = require('../lib/db');
 
@@ -13,6 +6,17 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+function rowToProduct(r) {
+  return {
+    cat: r.cat, nameKo: r.name_ko, nameEn: r.name_en, sku: r.sku,
+    price: Number(r.price), ctnPrice: r.ctn_price !== null ? Number(r.ctn_price) : undefined,
+    ctnQty: r.ctn_qty || undefined, img: r.img || undefined, imgPage: r.img_page || undefined,
+    url: r.url || undefined, spec: r.spec || undefined,
+    lidOptions: r.lid_options || undefined, colorOptions: r.color_options || undefined,
+    tbd: r.tbd,
+  };
 }
 
 function stripPrices(p) {
@@ -36,6 +40,15 @@ module.exports = async (req, res) => {
         [user ? user.id : null, user ? user.phone : null, deviceId]
       ).catch(() => {});
     }
+
+    const [{ rows: productRows }, { rows: imgRows }] = await Promise.all([
+      db.query('SELECT * FROM products ORDER BY cat, sort_order, name_ko'),
+      db.query('SELECT page_number, img FROM togo_page_images'),
+    ]);
+
+    const products = productRows.map(rowToProduct);
+    const togoPageImages = {};
+    imgRows.forEach(r => { togoPageImages[r.page_number] = r.img; });
 
     const outProducts = canSeePrices ? products : products.map(stripPrices);
 
