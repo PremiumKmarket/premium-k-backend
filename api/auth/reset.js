@@ -18,13 +18,13 @@ module.exports = async (req, res) => {
     if (!cleanPhone) {
       return res.status(400).json({
         error: 'INVALID_PHONE',
-        message: '휴대폰 번호를 입력해주세요. Please enter your phone number.',
+        message: 'Please enter your phone number. 휴대폰 번호를 입력해주세요.',
       });
     }
 
     const successMsg =
-      '요청이 관리자에게 전달되었습니다. 빠른 시일 내에 비밀번호를 재설정하고 안내드리겠습니다.\n' +
-      'Your request has been sent to the administrator. We will reset your password and notify you shortly.';
+      'Your request has been sent to the administrator. We will reset your password and notify you shortly.\n' +
+      '요청이 관리자에게 전달되었습니다. 빠른 시일 내에 비밀번호를 재설정하고 안내드리겠습니다.';
 
     const { rows } = await db.query('SELECT id, email, company_name FROM users WHERE phone = $1', [cleanPhone]);
     const user = rows[0];
@@ -48,7 +48,7 @@ module.exports = async (req, res) => {
     console.error(err);
     return res.status(500).json({
       error: 'SERVER_ERROR',
-      message: '처리 중 오류가 발생했습니다. An error occurred. Please try again.',
+      message: 'An error occurred. Please try again. 처리 중 오류가 발생했습니다.',
     });
   }
 };
