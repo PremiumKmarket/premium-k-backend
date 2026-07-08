@@ -71,8 +71,13 @@ module.exports = async (req, res) => {
       if (cat) { params.push(cat); sql += ` AND cat = $${params.length}`; }
       if (search) { params.push(`%${search}%`); sql += ` AND (name_ko ILIKE $${params.length} OR name_en ILIKE $${params.length} OR sku ILIKE $${params.length})`; }
       sql += ' ORDER BY cat, sort_order, name_ko LIMIT 500';
-      const { rows } = await db.query(sql, params);
-      return res.json({ products: rows.map(rowToProduct) });
+      const [{ rows }, { rows: imgRows }] = await Promise.all([
+        db.query(sql, params),
+        db.query('SELECT page_number, img FROM togo_page_images'),
+      ]);
+      const togoPageImages = {};
+      imgRows.forEach(r => { togoPageImages[r.page_number] = r.img; });
+      return res.json({ products: rows.map(rowToProduct), togoPageImages });
     }
 
     if (req.method === 'POST') {
