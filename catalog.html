@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premium K · Product Catalog 상품 관리</title>
+<style>
+:root{ --navy:#0B1B33; --orange:#E05D00; --bg:#F4F5F7; --line:#E2E5EA; --text:#1C2333; --text-2:#5B6272; --green:#1E7A46; --red:#B3261E; }
+*{box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);margin:0;padding:16px;color:var(--text);}
+h1{font-size:18px;color:var(--navy);}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;}
+button{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-weight:700;}
+button.secondary{background:var(--bg);color:var(--navy);border:1px solid var(--line);}
+button.danger{background:var(--red);}
+button.small{padding:5px 9px;font-size:11.5px;}
+input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+.toolbar select, .toolbar input{flex:1;min-width:140px;}
+#loginBox{max-width:320px;margin:60px auto;}
+.plist{display:flex;flex-direction:column;gap:10px;}
+.prow{display:flex;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px;align-items:flex-start;}
+.prow img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex-shrink:0;background:var(--bg);}
+.prow .noimg{width:56px;height:56px;border-radius:8px;border:1px dashed var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-2);text-align:center;}
+.pfields{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;}
+.pfields label{display:block;font-size:10px;color:var(--text-2);font-weight:700;margin-bottom:2px;}
+.pfields input{width:100%;}
+.pactions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+.msg{font-size:11.5px;margin-top:4px;}
+.msg.ok{color:var(--green);} .msg.err{color:var(--red);}
+.newform{display:none;border:1px dashed var(--orange);border-radius:10px;padding:12px;margin-bottom:12px;}
+.newform.open{display:block;}
+.newform .pfields{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:8px;}
+.newform .pfields label{font-size:11px;color:var(--text-2);font-weight:700;}
+.newform input{width:100%;}
+.count-badge{font-size:11px;color:var(--text-2);}
+</style>
+</head>
+<body>
+
+<div id="loginBox" class="card">
+  <h1>Admin Login 관리자 로그인</h1>
+  <input id="phone" placeholder="Phone 휴대폰 번호" style="width:100%;margin-bottom:8px;">
+  <input id="password" type="password" maxlength="6" placeholder="Password 6 digits" style="width:100%;margin-bottom:8px;">
+  <button onclick="adminLogin()" style="width:100%;padding:10px;">Login 로그인</button>
+  <div id="loginErr" class="msg err"></div>
+</div>
+
+<div id="dashboard" style="display:none;">
+  <h1>Product Catalog 상품 관리</h1>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div class="msg">First time only 최초 1회: 기존 상품 데이터를 DB로 가져옵니다.</div>
+      <button class="secondary" onclick="seedCatalog()">Import bundled catalog 카탈로그 가져오기</button>
+    </div>
+    <div id="seedMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <button onclick="toggleNewForm()">+ Add New Product 새 상품 추가</button>
+    <div class="newform" id="newForm">
+      <div class="pfields">
+        <div><label>SKU *</label><input id="nSku"></div>
+        <div><label>Category 카테고리 *</label><input id="nCat" placeholder="예: 수산물/건어물"></div>
+        <div><label>Name (KO) 한글명 *</label><input id="nNameKo"></div>
+        <div><label>Name (EN) 영문명</label><input id="nNameEn"></div>
+        <div><label>Unit Price 개당가격</label><input id="nPrice" type="number" step="0.01"></div>
+        <div><label>Carton Price 카톤가격</label><input id="nCtnPrice" type="number" step="0.01"></div>
+        <div><label>Carton Qty 카톤입수</label><input id="nCtnQty" type="number"></div>
+        <div><label>Product URL</label><input id="nUrl"></div>
+      </div>
+      <label style="font-size:11px;color:var(--text-2);font-weight:700;">Photo 사진</label><br>
+      <input type="file" id="nImgFile" accept="image/*" onchange="previewNewImg(event)"><br>
+      <img id="nImgPreview" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-top:6px;display:none;">
+      <div style="margin-top:10px;">
+        <button onclick="createProduct()">Create 생성</button>
+        <button class="secondary" onclick="toggleNewForm()">Cancel 취소</button>
+      </div>
+      <div id="newMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <select id="catFilter" onchange="loadProducts()"><option value="">All categories 전체 카테고리</option></select>
+      <input id="searchBox" placeholder="Search name/SKU 이름/SKU 검색" onkeydown="if(event.key==='Enter')loadProducts()">
+      <button onclick="loadProducts()">Search 검색</button>
+      <span class="count-badge" id="countBadge"></span>
+    </div>
+    <div class="plist" id="plist"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://premium-k-backend.vercel.app/api';
+let token = localStorage.getItem('pk_token');
+let newImgDataUrl = null;
+
+async function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API_BASE + path, { ...options, headers });
+  if (res.status === 204) return {};
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
+  return data;
+}
+
+async function adminLogin() {
+  const phone = document.getElementById('phone').value.trim();
+  const password = document.getElementById('password').value.trim();
+  try {
+    const data = await api('/auth/login', { method:'POST', body: JSON.stringify({ phone, password }) });
+    if (!data.isAdmin) { document.getElementById('loginErr').textContent = 'Not an admin account 관리자 계정이 아닙니다.'; return; }
+    token = data.token;
+    localStorage.setItem('pk_token', token);
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    loadProducts();
+  } catch (e) {
+    document.getElementById('loginErr').textContent = e.message;
+  }
+}
+
+async function seedCatalog(){
+  const msgEl = document.getElementById('seedMsg');
+  msgEl.className = 'msg';
+  msgEl.textContent = 'Importing... 가져오는 중...';
+  try {
+    const data = await api('/admin/products?action=seed');
+    msgEl.className = 'msg ok';
+    msgEl.textContent = data.message;
+    loadProducts();
+  } catch (e) {
+    msgEl.className = 'msg err';
+    msgEl.textContent = e.message;
+  }
+}
+
+function toggleNewForm(){
+  document.getElementById('newForm').classList.toggle('open');
+}
+
+function previewNewImg(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    newImgDataUrl = reader.result;
+    const img = document.getElementById('nImgPreview');
+    img.src = newImgDataUrl;
+    img.style.display = 'inline-block';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function createProduct(){
+  const msgEl = document.getElementById('newMsg');
+  msgEl.className = 'msg';
+  const payload = {
+    sku: document.getElementById('nSku').value.trim(),
+    cat: document.getElementById('nCat').value.trim(),
+    nameKo: document.getElementById('nNameKo').value.trim(),
+    nameEn: document.getElementById('nNameEn').value.trim(),
+    price: parseFloat(document.getElementById('nPrice').value) || 0,
+    ctnPrice: parseFloat(document.getElementById('nCtnPrice').value) || null,
+    ctnQty: parseInt(document.getElementById('nCtnQty').value) || null,
+    url: document.getElementById('nUrl').value.trim(),
+    img: newImgDataUrl,
+  };
+  try {
+    await api('/admin/products', { method:'POST', body: JSON.stringify(payload) });
+    msgEl.className = 'msg ok';
+    msgEl.textContent = 'Product created. 상품이 생성되었습니다.';
+    ['nSku','nCat','nNameKo','nNameEn','nPrice','nCtnPrice','nCtnQty','nUrl'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('nImgPreview').style.display = 'none';
+    newImgDataUrl = null;
+    loadProducts();
+  } catch (e) {
+    msgEl.className = 'msg err';
+    msgEl.textContent = e.message;
+  }
+}
+
+let allCats = [];
+async function loadProducts(){
+  const cat = document.getElementById('catFilter').value;
+  const search = document.getElementById('searchBox').value.trim();
+  const params = new URLSearchParams();
+  if (cat) params.set('cat', cat);
+  if (search) params.set('search', search);
+  const data = await api('/admin/products' + (params.toString() ? '?' + params.toString() : ''));
+
+  if (!cat && !search) {
+    allCats = [...new Set(data.products.map(p => p.cat))].sort();
+    const sel = document.getElementById('catFilter');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All categories 전체 카테고리</option>' + allCats.map(c => `<option value="${c}">${c}</option>`).join('');
+    sel.value = cur;
+  }
+
+  document.getElementById('countBadge').textContent = `${data.products.length} items`;
+  const el = document.getElementById('plist');
+  el.innerHTML = data.products.map(p => `
+    <div class="prow" data-id="${p.id}">
+      ${p.img ? `<img src="${p.img}">` : `<div class="noimg">No photo</div>`}
+      <div class="pfields">
+        <div><label>SKU</label><input value="${p.sku}" disabled></div>
+        <div><label>Category</label><input class="f-cat" value="${p.cat}"></div>
+        <div><label>Name (KO)</label><input class="f-nameKo" value="${(p.nameKo||'').replace(/"/g,'&quot;')}"></div>
+        <div><label>Name (EN)</label><input class="f-nameEn" value="${(p.nameEn||'').replace(/"/g,'&quot;')}"></div>
+        <div><label>Unit $</label><input class="f-price" type="number" step="0.01" value="${p.price}"></div>
+        <div><label>Carton $</label><input class="f-ctnPrice" type="number" step="0.01" value="${p.ctnPrice ?? ''}"></div>
+        <div><label>Carton Qty</label><input class="f-ctnQty" type="number" value="${p.ctnQty ?? ''}"></div>
+        <div><label>URL</label><input class="f-url" value="${p.url ?? ''}"></div>
+        <div><label>Photo</label><input type="file" class="f-img" accept="image/*" onchange="previewRowImg(event,'${p.id}')"></div>
+      </div>
+      <div class="pactions">
+        <button class="small" onclick="saveProduct('${p.id}')">Save 저장</button>
+        <button class="danger small" onclick="deleteProduct('${p.id}','${(p.nameKo||'').replace(/'/g,"")}')">Delete 삭제</button>
+      </div>
+      <div class="msg" id="rowmsg-${p.id}" style="display:none;"></div>
+    </div>
+  `).join('');
+}
+
+const rowImgData = {};
+function previewRowImg(e, id){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { rowImgData[id] = reader.result; };
+  reader.readAsDataURL(file);
+}
+
+async function saveProduct(id){
+  const row = document.querySelector(`.prow[data-id="${id}"]`);
+  const msgEl = document.getElementById(`rowmsg-${id}`);
+  const payload = {
+    id,
+    cat: row.querySelector('.f-cat').value.trim(),
+    nameKo: row.querySelector('.f-nameKo').value.trim(),
+    nameEn: row.querySelector('.f-nameEn').value.trim(),
+    price: parseFloat(row.querySelector('.f-price').value) || 0,
+    ctnPrice: row.querySelector('.f-ctnPrice').value ? parseFloat(row.querySelector('.f-ctnPrice').value) : null,
+    ctnQty: row.querySelector('.f-ctnQty').value ? parseInt(row.querySelector('.f-ctnQty').value) : null,
+    url: row.querySelector('.f-url').value.trim(),
+  };
+  if (rowImgData[id]) payload.img = rowImgData[id];
+
+  try {
+    await api('/admin/products', { method:'PATCH', body: JSON.stringify(payload) });
+    msgEl.className = 'msg ok'; msgEl.style.display = 'block';
+    msgEl.textContent = 'Saved 저장됨';
+    setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
+  } catch (e) {
+    msgEl.className = 'msg err'; msgEl.style.display = 'block';
+    msgEl.textContent = e.message;
+  }
+}
+
+async function deleteProduct(id, name){
+  if (!confirm(`Delete "${name}"? 이 상품을 삭제할까요?`)) return;
+  try {
+    await api('/admin/products', { method:'DELETE', body: JSON.stringify({ id }) });
+    loadProducts();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+if (token) {
+  document.getElementById('loginBox').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  loadProducts().catch(()=>{ localStorage.removeItem('pk_token'); location.reload(); });
+}
+</script>
+</body>
+</html>
