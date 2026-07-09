@@ -14,6 +14,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 .brand{background:linear-gradient(180deg,var(--navy),#132749);padding:16px 18px;position:sticky;top:0;z-index:10;}
 .brand .title{color:#fff;font-size:16px;font-weight:700;}
 .brand .sub{color:#B9C2D6;font-size:12px;margin-top:2px;}
+.brand .navrow{margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;}
+.brand .navrow a{color:#fff;font-size:12.5px;font-weight:700;text-decoration:underline;}
 .wrap{padding:14px 16px;max-width:640px;margin:0 auto;}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;}
 h2{font-size:14px;color:var(--navy);margin:0 0 12px;}
@@ -35,6 +37,7 @@ button.small{padding:6px 10px;font-size:11.5px;}
 .order-item pre{white-space:pre-wrap;font-size:11.5px;background:var(--bg);border-radius:8px;padding:8px;margin-top:8px;max-height:200px;overflow-y:auto;display:none;}
 a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer;}
 #loginGate{max-width:320px;margin:60px auto;text-align:center;}
+#loadError{display:none;max-width:420px;margin:40px auto;text-align:center;}
 </style>
 </head>
 <body>
@@ -42,8 +45,9 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
 <div class="brand">
   <div class="title">Premium K · 내 계정 My Account</div>
   <div class="sub" id="whoami"></div>
-  <div style="margin-top:8px;">
-    <a href="#" onclick="goBackToShop();return false;" style="color:#fff;font-size:12.5px;font-weight:700;text-decoration:underline;">← Back to Shopping 상품 주문하러 가기</a>
+  <div class="navrow">
+    <a href="#" onclick="goBackToShop();return false;">← Back to Shopping 상품 주문하러 가기</a>
+    <a href="#" onclick="jumpToOrders();return false;">📦 Order History 주문내역 확인</a>
   </div>
 </div>
 
@@ -61,6 +65,13 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
   </div>
 </div>
 
+<div id="loadError" class="card">
+  <div class="msg err" style="font-size:13px;">
+    Your session has expired. Please log in again.<br>세션이 만료되었습니다. 다시 로그인해주세요.
+  </div>
+  <button style="width:100%;margin-top:10px;" onclick="logout()">Login again 다시 로그인</button>
+</div>
+
 <div class="wrap" id="mainContent" style="display:none;">
 
   <div class="card">
@@ -69,6 +80,7 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
     <div class="field"><label>Email 이메일</label><input id="profEmail" disabled></div>
     <div class="field"><label>Company 상호명</label><input id="profCompany" disabled></div>
     <div class="field"><label>Status 상태</label><input id="profStatus" disabled></div>
+    <div class="field"><label>Member Since 가입일시</label><input id="profCreatedAt" disabled></div>
   </div>
 
   <div class="card">
@@ -91,7 +103,7 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
     <div id="addrMsg" class="msg"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="ordersCard">
     <h2>Order History 주문 내역</h2>
     <div id="orderList"></div>
   </div>
@@ -104,7 +116,8 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
 <script>
 const API_BASE = 'https://premium-k-backend.vercel.app/api';
 let token = localStorage.getItem('pk_token');
-let authUser = JSON.parse(localStorage.getItem('pk_user') || 'null');
+let authUser = null;
+try { authUser = JSON.parse(localStorage.getItem('pk_user') || 'null'); } catch (e) { authUser = null; }
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
@@ -112,7 +125,11 @@ async function api(path, options = {}) {
   const res = await fetch(API_BASE + path, { ...options, headers });
   if (res.status === 204) return {};
   const data = await res.json().catch(()=>({}));
-  if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
+  if (!res.ok) {
+    const err = new Error(data.message || data.error || 'Request failed');
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -143,7 +160,10 @@ async function doLogin(){
   try {
     const data = await api('/auth/login', { method:'POST', body: JSON.stringify({ phone, password }) });
     token = data.token;
-    authUser = { phone: phone.replace(/[^0-9]/g,''), approved: data.approved, email: data.email, companyName: data.companyName, isAdmin: data.isAdmin };
+    authUser = {
+      phone: phone.replace(/[^0-9]/g,''), approved: data.approved, email: data.email,
+      companyName: data.companyName, isAdmin: data.isAdmin, createdAt: data.createdAt,
+    };
     localStorage.setItem('pk_token', token);
     localStorage.setItem('pk_user', JSON.stringify(authUser));
     init();
@@ -157,14 +177,36 @@ function goBackToShop(){
   if (history.length > 1) {
     history.back();
   } else {
-    alert('상품 주문 화면(Site_Order 파일)을 직접 열어주세요.\nPlease open the Site_Order file directly to shop.');
+    alert('Please open the Site_Order file directly to shop.\n상품 주문 화면(Site_Order 파일)을 직접 열어주세요.');
   }
+}
+
+function jumpToOrders(){
+  const el = document.getElementById('ordersCard');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function logout(){
   localStorage.removeItem('pk_token');
   localStorage.removeItem('pk_user');
-  location.reload();
+  token = null; authUser = null;
+  document.getElementById('loadError').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('loginGate').style.display = 'block';
+}
+
+function showSessionExpired(){
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('loadError').style.display = 'block';
+  localStorage.removeItem('pk_token');
+  localStorage.removeItem('pk_user');
+}
+
+function formatDate(iso){
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) + ' ' + new Date(iso).toLocaleDateString('ko-KR'); }
+  catch (e) { return iso; }
 }
 
 async function loadProfile(){
@@ -172,6 +214,7 @@ async function loadProfile(){
   document.getElementById('profEmail').value = authUser.email || '—';
   document.getElementById('profCompany').value = authUser.companyName || '—';
   document.getElementById('profStatus').value = authUser.approved ? 'Approved 승인됨' : 'Pending approval 승인 대기중';
+  document.getElementById('profCreatedAt').value = formatDate(authUser.createdAt);
   document.getElementById('whoami').textContent = `${authUser.phone}님 ${authUser.isAdmin ? '(Admin 관리자)' : ''}`;
 }
 
@@ -253,4 +296,41 @@ async function loadOrders(){
       </div>
       <div class="meta">Invoice No. 인보이스 번호: ${o.invoice_number || '—'}</div>
       <div class="meta">Fulfillment 수령방법 ${o.delivery_method || '—'} · Payment 결제방법 ${o.payment_method || '—'}</div>
-      <a class="linklike"
+      <a class="linklike" onclick="toggleOrderDetail(${idx})">View details 상세보기</a>
+      <pre id="orderDetail${idx}">${(o.order_text || '').replace(/</g,'&lt;')}</pre>
+    </div>
+  `).join('');
+}
+
+function toggleOrderDetail(idx){
+  const el = document.getElementById('orderDetail' + idx);
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+async function init(){
+  document.getElementById('loadError').style.display = 'none';
+
+  if (!token || !authUser) {
+    document.getElementById('loginGate').style.display = 'block';
+    document.getElementById('mainContent').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  loadProfile();
+
+  try {
+    await Promise.all([loadAddresses(), loadOrders()]);
+  } catch (e) {
+    console.error(e);
+    if (e.status === 401) {
+      showSessionExpired();
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
