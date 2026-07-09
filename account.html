@@ -42,6 +42,9 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
 <div class="brand">
   <div class="title">Premium K · 내 계정 My Account</div>
   <div class="sub" id="whoami"></div>
+  <div style="margin-top:8px;">
+    <a href="#" onclick="goBackToShop();return false;" style="color:#fff;font-size:12.5px;font-weight:700;text-decoration:underline;">← Back to Shopping 상품 주문하러 가기</a>
+  </div>
 </div>
 
 <div id="loginGate" class="card" style="display:none;">
@@ -150,6 +153,14 @@ async function doLogin(){
   }
 }
 
+function goBackToShop(){
+  if (history.length > 1) {
+    history.back();
+  } else {
+    alert('상품 주문 화면(Site_Order 파일)을 직접 열어주세요.\nPlease open the Site_Order file directly to shop.');
+  }
+}
+
 function logout(){
   localStorage.removeItem('pk_token');
   localStorage.removeItem('pk_user');
@@ -242,31 +253,4 @@ async function loadOrders(){
       </div>
       <div class="meta">Invoice No. 인보이스 번호: ${o.invoice_number || '—'}</div>
       <div class="meta">Fulfillment 수령방법 ${o.delivery_method || '—'} · Payment 결제방법 ${o.payment_method || '—'}</div>
-      <a class="linklike" onclick="toggleOrderDetail(${idx})">View details 상세보기</a>
-      <pre id="orderDetail${idx}">${(o.order_text || '').replace(/</g,'&lt;')}</pre>
-    </div>
-  `).join('');
-}
-
-function toggleOrderDetail(idx){
-  const el = document.getElementById('orderDetail' + idx);
-  el.style.display = el.style.display === 'block' ? 'none' : 'block';
-}
-
-async function init(){
-  if (!token || !authUser) {
-    document.getElementById('loginGate').style.display = 'block';
-    document.getElementById('mainContent').style.display = 'none';
-    return;
-  }
-  document.getElementById('loginGate').style.display = 'none';
-  document.getElementById('mainContent').style.display = 'block';
-  loadProfile();
-  loadAddresses().catch(e => console.error(e));
-  loadOrders().catch(e => console.error(e));
-}
-
-init();
-</script>
-</body>
-</html>
+      <a class="linklike"
