@@ -42,6 +42,7 @@ module.exports = async (req, res) => {
       email: user.email,
       companyName: user.company_name,
       isAdmin: user.is_admin,
+      createdAt: user.created_at,
       message: user.approved ? 'Logged in. 로그인되었습니다.' : 'Logged in. Prices will be visible once an admin approves your account. 다만 아직 관리자 승인 전이라 가격은 승인 후에 보입니다.',
     });
   } catch (err) {
