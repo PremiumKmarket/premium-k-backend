@@ -56,6 +56,11 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
     <h2 style="font-size:14px;">최근 30일 활발한 고객</h2>
     <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
   </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">영업사원별 매출 / 인센티브 (5%, 전체 기간)</h2>
+    <table id="repSalesTable"><thead><tr><th>영업사원</th><th>주문건수</th><th>총 매출</th><th>인센티브 (5%)</th></tr></thead><tbody></tbody></table>
+  </div>
 </div>
 
 <script>
@@ -155,6 +160,11 @@ async function loadInsights() {
   if (data.activeUsers) {
     document.querySelector('#activeUserTable tbody').innerHTML = data.activeUsers.map(r => `
       <tr><td>${r.phone}</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
+    `).join('');
+  }
+  if (data.salesByRep) {
+    document.querySelector('#repSalesTable tbody').innerHTML = data.salesByRep.map(r => `
+      <tr><td>${r.repName}</td><td>${r.orderCount}</td><td>$${r.totalSales.toFixed(2)}</td><td style="color:var(--green,#1E7A46);font-weight:700;">$${r.incentive.toFixed(2)}</td></tr>
     `).join('');
   }
 }
