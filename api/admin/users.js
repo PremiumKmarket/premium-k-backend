@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
 
   if (req.method === 'GET') {
     const { rows } = await db.query(
-      `SELECT id, phone, email, company_name, address, approved, is_admin, created_at, approved_at
+      `SELECT id, phone, email, company_name, address, rep_name, approved, is_admin, created_at, approved_at
        FROM users ORDER BY approved ASC, created_at DESC`
     );
     return res.json({ users: rows });
