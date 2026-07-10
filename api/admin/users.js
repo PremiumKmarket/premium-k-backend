@@ -2,6 +2,7 @@
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
+const { sendSms, toE164US } = require('../../lib/sms');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -54,6 +55,15 @@ module.exports = async (req, res) => {
       [!!approved, userId]
     );
     if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+
+    if (approved) {
+      const customerPhone = toE164US(rows[0].phone);
+      const body =
+        `[Premium K] Your account has been approved! You can now log in and see wholesale prices.\n` +
+        `계정이 승인되었습니다! 이제 로그인하시면 도매가를 확인하실 수 있습니다.`;
+      sendSms({ to: customerPhone, body }).catch((e) => console.error('[approve] SMS failed:', e.message));
+    }
+
     return res.json({ user: rows[0] });
   }
 
