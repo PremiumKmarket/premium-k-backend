@@ -1,6 +1,7 @@
 // api/auth/register.js
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
+const { sendSms, toE164US } = require('../../lib/sms');
 
 const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
 
@@ -12,14 +13,6 @@ function setCors(res) {
 
 async function notifyAdminOfNewRegistration({ phone, email, companyName, address }) {
   const { EMAILJS_SERVICE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY, EMAILJS_TEMPLATE_ID, ADMIN_NOTIFY_EMAIL } = process.env;
-
-  console.log('[notifyAdmin] starting. Has fetch:', typeof fetch !== 'undefined', '| using fetchFn:', !!fetchFn);
-  console.log('[notifyAdmin] env check:', {
-    hasServiceId: !!EMAILJS_SERVICE_ID,
-    hasPublicKey: !!EMAILJS_PUBLIC_KEY,
-    hasPrivateKey: !!EMAILJS_PRIVATE_KEY,
-    hasTemplateId: !!EMAILJS_TEMPLATE_ID,
-  });
 
   if (!EMAILJS_SERVICE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY || !EMAILJS_TEMPLATE_ID) {
     console.warn('[notifyAdmin] EmailJS env vars not fully set — skipping registration notification email.');
@@ -36,7 +29,6 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
     `https://premium-k-backend.vercel.app/admin.html`;
 
   try {
-    console.log('[notifyAdmin] sending request to EmailJS API...');
     const res = await fetchFn('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -60,6 +52,20 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
   } catch (e) {
     console.error('[notifyAdmin] Failed to send registration notification email:', e.message, e.stack);
   }
+}
+
+async function notifySmsOfNewRegistration({ phone, companyName }) {
+  const adminPhone = toE164US(process.env.ADMIN_PHONE_NUMBER);
+  if (!adminPhone) {
+    console.warn('[notifySms] ADMIN_PHONE_NUMBER not set — skipping SMS.');
+    return;
+  }
+  const body =
+    `[Premium K] New registration awaiting approval 신규 회원가입 승인요청\n` +
+    `Phone 전화번호: ${phone}\n` +
+    `Company 상호명: ${companyName || '—'}\n` +
+    `Approve at: https://premium-k-backend.vercel.app/admin.html`;
+  await sendSms({ to: adminPhone, body });
 }
 
 module.exports = async (req, res) => {
@@ -95,9 +101,11 @@ module.exports = async (req, res) => {
       [rows[0].id, cleanPhone, JSON.stringify({ email, address })]
     );
 
-    console.log('[register] user created, now attempting admin notification email for phone:', cleanPhone);
     await notifyAdminOfNewRegistration({ phone: cleanPhone, email, companyName, address }).catch((e) => {
       console.error('[register] notifyAdminOfNewRegistration threw:', e.message);
+    });
+    await notifySmsOfNewRegistration({ phone: cleanPhone, companyName }).catch((e) => {
+      console.error('[register] notifySmsOfNewRegistration threw:', e.message);
     });
 
     return res.status(201).json({
