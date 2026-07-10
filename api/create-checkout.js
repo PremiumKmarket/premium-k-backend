@@ -1,5 +1,100 @@
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+/**
+ * api/create-checkout.js
+ * Vercel Serverless Function.
+ *
+ * Receives the exact order total from the field-order app and creates a
+ * SHOPIFY DRAFT ORDER for that amount, returning its hosted invoice/checkout
+ * URL. The browser redirects there, and the customer pays through
+ * Premium K's own Shopify store (www.premium-k.com) — same payment methods
+ * already configured there.
+ *
+ * How it works:
+ *  1. Exchange Client ID + Client Secret for a short-lived Admin API access
+ *     token (Shopify's "client credentials grant" — required since Jan 2026,
+ *     tokens expire after ~24h so we just fetch a fresh one every request).
+ *  2. Create a Draft Order via the GraphQL Admin API with ONE custom line
+ *     item matching the cart total (so Shopify doesn't need to know about
+ *     our 400+ individual SKUs — this mirrors how the old Stripe flow
+ *     charged one lump sum).
+ *  3. Return draftOrder.invoiceUrl — Shopify's hosted payment page.
+ *
+ * Required environment variables (set in Vercel dashboard, NOT in code):
+ *   SHOPIFY_STORE_DOMAIN   = premiumkfood.myshopify.com
+ *   SHOPIFY_CLIENT_ID      = (from Dev Dashboard → app → Settings)
+ *   SHOPIFY_CLIENT_SECRET  = (from Dev Dashboard → app → Settings)
+ *
+ * Optional:
+ *   ALLOWED_ORIGIN = https://tronicholdings.com   (locks down CORS to your domain)
+ */
+
+const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
+
+const API_VERSION = '2026-07';
+
+async function getShopifyAccessToken() {
+  const { SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET } = process.env;
+  const res = await fetchFn(`https://${SHOPIFY_STORE_DOMAIN}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: SHOPIFY_CLIENT_ID,
+      client_secret: SHOPIFY_CLIENT_SECRET,
+      grant_type: 'client_credentials',
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    throw new Error('Failed to get Shopify access token: ' + JSON.stringify(data));
+  }
+  return data.access_token;
+}
+
+async function createDraftOrder({ accessToken, amount, orderNumber, customerName, customerEmail }) {
+  const { SHOPIFY_STORE_DOMAIN } = process.env;
+
+  const mutation = `
+    mutation draftOrderCreate($input: DraftOrderInput!) {
+      draftOrderCreate(input: $input) {
+        draftOrder { id invoiceUrl }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const variables = {
+    input: {
+      lineItems: [
+        {
+          title: `Premium K Order${orderNumber ? ' #' + orderNumber : ''}`,
+          originalUnitPrice: amount.toFixed(2),
+          quantity: 1,
+        },
+      ],
+      email: customerEmail || undefined,
+      note: customerName ? `Customer: ${customerName}` : undefined,
+    },
+  };
+
+  const res = await fetchFn(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/${API_VERSION}/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': accessToken,
+    },
+    body: JSON.stringify({ query: mutation, variables }),
+  });
+
+  const data = await res.json();
+  const errors = data?.data?.draftOrderCreate?.userErrors;
+  if (errors && errors.length) {
+    throw new Error('Shopify draft order error: ' + JSON.stringify(errors));
+  }
+  const invoiceUrl = data?.data?.draftOrderCreate?.draftOrder?.invoiceUrl;
+  if (!invoiceUrl) {
+    throw new Error('No invoice URL returned: ' + JSON.stringify(data));
+  }
+  return invoiceUrl;
+}
 
 module.exports = async (req, res) => {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
@@ -21,28 +116,12 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Amount exceeds safety limit ($20,000). Contact admin.' });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
-      customer_email: customerEmail || undefined,
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Premium K Order${orderNumber ? ' #' + orderNumber : ''}`,
-              description: customerName ? `Customer: ${customerName}` : undefined,
-            },
-            unit_amount: Math.round(numericAmount * 100),
-          },
-          quantity: 1,
-        },
-      ],
-      success_url: `https://www.premium-k.com/pages/order-paid?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://www.premium-k.com/pages/order-cancelled`,
+    const accessToken = await getShopifyAccessToken();
+    const invoiceUrl = await createDraftOrder({
+      accessToken, amount: numericAmount, orderNumber, customerName, customerEmail,
     });
 
-    return res.status(200).json({ url: session.url });
+    return res.status(200).json({ url: invoiceUrl });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to create checkout session', detail: err.message });
