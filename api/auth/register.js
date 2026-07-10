@@ -11,7 +11,7 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-async function notifyAdminOfNewRegistration({ phone, email, companyName, address }) {
+async function notifyAdminOfNewRegistration({ phone, email, companyName, address, repName }) {
   const { EMAILJS_SERVICE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY, EMAILJS_TEMPLATE_ID, ADMIN_NOTIFY_EMAIL } = process.env;
 
   if (!EMAILJS_SERVICE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY || !EMAILJS_TEMPLATE_ID) {
@@ -24,7 +24,8 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
     `휴대폰번호 : ${phone}\n` +
     `이메일     : ${email || '—'}\n` +
     `상호명     : ${companyName || '—'}\n` +
-    `배송주소   : ${address || '—'}\n\n` +
+    `배송주소   : ${address || '—'}\n` +
+    `담당 영업사원 : ${repName || '—'}\n\n` +
     `관리자 페이지에서 승인해주세요:\n` +
     `https://premium-k-backend.vercel.app/admin.html`;
 
@@ -38,8 +39,8 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
         user_id: EMAILJS_PUBLIC_KEY,
         accessToken: EMAILJS_PRIVATE_KEY,
         template_params: {
-          rep_name: '시스템',
-          customer_name: `[회원가입 승인요청] ${phone}`,
+          rep_name: repName || '시스템',
+          customer_name: `[회원가입 승인요청] ${phone}${repName ? ' · 담당: ' + repName : ''}`,
           order_total: '0.00',
           date: new Date().toLocaleString('ko-KR'),
           message,
@@ -54,7 +55,7 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
   }
 }
 
-async function notifySmsOfNewRegistration({ phone, companyName }) {
+async function notifySmsOfNewRegistration({ phone, companyName, repName }) {
   const adminPhone = toE164US(process.env.ADMIN_PHONE_NUMBER);
   if (!adminPhone) {
     console.warn('[notifySms] ADMIN_PHONE_NUMBER not set — skipping SMS.');
@@ -64,6 +65,7 @@ async function notifySmsOfNewRegistration({ phone, companyName }) {
     `[Premium K] New registration awaiting approval 신규 회원가입 승인요청\n` +
     `Phone 전화번호: ${phone}\n` +
     `Company 상호명: ${companyName || '—'}\n` +
+    `Sales Rep 담당영업사원: ${repName || '—'}\n` +
     `Approve at: https://premium-k-backend.vercel.app/admin.html`;
   await sendSms({ to: adminPhone, body });
 }
@@ -74,7 +76,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { phone, password, email, companyName, address } = req.body;
+    const { phone, password, email, companyName, address, repName } = req.body;
 
     if (!phone || !/^[0-9]{9,15}$/.test(phone.replace(/[^0-9]/g, ''))) {
       return res.status(400).json({ error: 'INVALID_PHONE', message: 'Please enter a valid phone number. 휴대폰 번호를 정확히 입력해주세요.' });
@@ -91,9 +93,9 @@ module.exports = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `INSERT INTO users (phone, password_hash, email, company_name, address, approved)
-       VALUES ($1,$2,$3,$4,$5,false) RETURNING id, phone, approved`,
-      [cleanPhone, passwordHash, email || null, companyName || null, address || null]
+      `INSERT INTO users (phone, password_hash, email, company_name, address, rep_name, approved)
+       VALUES ($1,$2,$3,$4,$5,$6,false) RETURNING id, phone, approved`,
+      [cleanPhone, passwordHash, email || null, companyName || null, address || null, repName || null]
     );
 
     await db.query(
@@ -101,10 +103,10 @@ module.exports = async (req, res) => {
       [rows[0].id, cleanPhone, JSON.stringify({ email, address })]
     );
 
-    await notifyAdminOfNewRegistration({ phone: cleanPhone, email, companyName, address }).catch((e) => {
+    await notifyAdminOfNewRegistration({ phone: cleanPhone, email, companyName, address, repName }).catch((e) => {
       console.error('[register] notifyAdminOfNewRegistration threw:', e.message);
     });
-    await notifySmsOfNewRegistration({ phone: cleanPhone, companyName }).catch((e) => {
+    await notifySmsOfNewRegistration({ phone: cleanPhone, companyName, repName }).catch((e) => {
       console.error('[register] notifySmsOfNewRegistration threw:', e.message);
     });
 
