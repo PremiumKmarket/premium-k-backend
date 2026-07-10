@@ -42,19 +42,24 @@ module.exports = async (req, res) => {
     GROUP BY phone ORDER BY events DESC LIMIT 50
   `);
 
-  const { rows: byRep } = await db.query(`
-    SELECT rep_name, count(*) AS order_count, COALESCE(sum(total), 0) AS total_sales
+  // 영업사원(rep_name)별 · 월별 매출 집계 + 5% 인센티브 계산
+  const { rows: byRepMonth } = await db.query(`
+    SELECT rep_name,
+           to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
+           count(*) AS order_count,
+           COALESCE(sum(total), 0) AS total_sales
     FROM orders
     WHERE rep_name IS NOT NULL AND rep_name <> ''
-    GROUP BY rep_name
-    ORDER BY total_sales DESC
+    GROUP BY rep_name, month
+    ORDER BY month DESC, total_sales DESC
   `);
-  const salesByRep = byRep.map(r => ({
+  const salesByRepMonth = byRepMonth.map(r => ({
     repName: r.rep_name,
+    month: r.month,
     orderCount: Number(r.order_count),
     totalSales: Number(r.total_sales),
-    incentive: Math.round(Number(r.total_sales) * 0.05 * 100) / 100, // 5% 인센티브
+    incentive: Math.round(Number(r.total_sales) * 0.05 * 100) / 100,
   }));
 
-  return res.json({ topSkus: rows, activeUsers, salesByRep });
+  return res.json({ topSkus: rows, activeUsers, salesByRepMonth });
 };
