@@ -8,23 +8,13 @@
  * Premium K's own Shopify store (www.premium-k.com) — same payment methods
  * already configured there.
  *
- * How it works:
- *  1. Exchange Client ID + Client Secret for a short-lived Admin API access
- *     token (Shopify's "client credentials grant" — required since Jan 2026,
- *     tokens expire after ~24h so we just fetch a fresh one every request).
- *  2. Create a Draft Order via the GraphQL Admin API with ONE custom line
- *     item matching the cart total (so Shopify doesn't need to know about
- *     our 400+ individual SKUs — this mirrors how the old Stripe flow
- *     charged one lump sum).
- *  3. Return draftOrder.invoiceUrl — Shopify's hosted payment page.
- *
  * Required environment variables (set in Vercel dashboard, NOT in code):
  *   SHOPIFY_STORE_DOMAIN   = premiumkfood.myshopify.com
  *   SHOPIFY_CLIENT_ID      = (from Dev Dashboard → app → Settings)
  *   SHOPIFY_CLIENT_SECRET  = (from Dev Dashboard → app → Settings)
  *
  * Optional:
- *   ALLOWED_ORIGIN = https://tronicholdings.com   (locks down CORS to your domain)
+ *   ALLOWED_ORIGIN = https://tronicholdings.com
  */
 
 const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
@@ -68,8 +58,10 @@ async function createDraftOrder({ accessToken, amount, orderNumber, customerName
           title: `Premium K Order${orderNumber ? ' #' + orderNumber : ''}`,
           originalUnitPrice: amount.toFixed(2),
           quantity: 1,
+          taxable: false,
         },
       ],
+      taxExempt: true, // 도매 거래 — Sales Tax 부과하지 않음
       email: customerEmail || undefined,
       note: customerName ? `Customer: ${customerName}` : undefined,
     },
