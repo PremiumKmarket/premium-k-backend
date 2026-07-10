@@ -17,6 +17,10 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 .pill.approved{background:#E7F6EC;color:#1E7A46;}
 .pill.pending{background:#FFF3E9;color:#8A4B00;}
 #loginBox{max-width:320px;margin:60px auto;}
+.pager{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:10px;}
+.pager button{padding:5px 12px;font-size:12px;}
+.pager button:disabled{opacity:0.35;cursor:default;}
+.pager span{font-size:12px;color:#5B6272;}
 </style>
 </head>
 <body>
@@ -38,6 +42,7 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
   <div class="card">
     <h2 style="font-size:14px;">회원 승인 관리</h2>
     <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>상태</th><th>가입일</th><th></th></tr></thead><tbody></tbody></table>
+    <div class="pager" id="userPager"></div>
   </div>
 
   <div class="card">
@@ -50,11 +55,13 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
   <div class="card">
     <h2 style="font-size:14px;">최근 30일 인기 상품 (조회/장바구니 기준)</h2>
     <table id="topSkuTable"><thead><tr><th>SKU</th><th>행동</th><th>횟수</th></tr></thead><tbody></tbody></table>
+    <div class="pager" id="topSkuPager"></div>
   </div>
 
   <div class="card">
     <h2 style="font-size:14px;">최근 30일 활발한 고객</h2>
     <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
+    <div class="pager" id="activeUserPager"></div>
   </div>
 
   <div class="card">
@@ -95,10 +102,26 @@ async function adminLogin() {
   }
 }
 
-async function loadUsers() {
-  const data = await api('/admin/users');
+const PAGE_SIZE = 10;
+const pageState = { user: 1, topSku: 1, activeUser: 1 };
+let allUsers = [], allTopSkus = [], allActiveUsers = [];
+
+function renderPager(pagerId, dataLen, key, onChangeFn) {
+  const totalPages = Math.max(1, Math.ceil(dataLen / PAGE_SIZE));
+  if (pageState[key] > totalPages) pageState[key] = totalPages;
+  const cur = pageState[key];
+  document.getElementById(pagerId).innerHTML = `
+    <button ${cur<=1?'disabled':''} onclick="${onChangeFn}(${cur-1})">‹ 이전</button>
+    <span>${cur} / ${totalPages} (총 ${dataLen}개)</span>
+    <button ${cur>=totalPages?'disabled':''} onclick="${onChangeFn}(${cur+1})">다음 ›</button>
+  `;
+}
+
+function goUserPage(p){ pageState.user = p; renderUserTable(); }
+function renderUserTable(){
+  const start = (pageState.user-1)*PAGE_SIZE;
   const tbody = document.querySelector('#userTable tbody');
-  tbody.innerHTML = data.users.map(u => `
+  tbody.innerHTML = allUsers.slice(start, start+PAGE_SIZE).map(u => `
     <tr>
       <td>${u.phone}</td><td>${u.email||'—'}</td><td>${u.company_name||'—'}</td><td>${u.address||'—'}</td>
       <td><span class="pill ${u.approved?'approved':'pending'}">${u.approved?'승인됨':'대기중'}</span></td>
@@ -111,6 +134,14 @@ async function loadUsers() {
         <button class="danger" onclick="deleteUser('${u.id}','${u.phone}')" style="margin-left:6px;">삭제</button>
       </td>
     </tr>`).join('');
+  renderPager('userPager', allUsers.length, 'user', 'goUserPage');
+}
+
+async function loadUsers() {
+  const data = await api('/admin/users');
+  allUsers = data.users;
+  pageState.user = 1;
+  renderUserTable();
 }
 
 async function setApproved(userId, approved) {
@@ -147,6 +178,24 @@ async function deleteUser(userId, phone) {
 
 let salesByRepMonthData = [];
 
+function goTopSkuPage(p){ pageState.topSku = p; renderTopSkuTable(); }
+function renderTopSkuTable(){
+  const start = (pageState.topSku-1)*PAGE_SIZE;
+  document.querySelector('#topSkuTable tbody').innerHTML = allTopSkus.slice(start, start+PAGE_SIZE).map(r => `
+    <tr><td>${r.sku}</td><td>${r.event_type}</td><td>${r.n}</td></tr>
+  `).join('');
+  renderPager('topSkuPager', allTopSkus.length, 'topSku', 'goTopSkuPage');
+}
+
+function goActiveUserPage(p){ pageState.activeUser = p; renderActiveUserTable(); }
+function renderActiveUserTable(){
+  const start = (pageState.activeUser-1)*PAGE_SIZE;
+  document.querySelector('#activeUserTable tbody').innerHTML = allActiveUsers.slice(start, start+PAGE_SIZE).map(r => `
+    <tr><td>${r.phone}</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
+  `).join('');
+  renderPager('activeUserPager', allActiveUsers.length, 'activeUser', 'goActiveUserPage');
+}
+
 async function loadInsights() {
   const phone = document.getElementById('insightPhone').value.trim();
   const data = await api('/admin/insights' + (phone ? `?phone=${encodeURIComponent(phone)}` : ''));
@@ -156,14 +205,14 @@ async function loadInsights() {
     `).join('');
   }
   if (data.topSkus) {
-    document.querySelector('#topSkuTable tbody').innerHTML = data.topSkus.map(r => `
-      <tr><td>${r.sku}</td><td>${r.event_type}</td><td>${r.n}</td></tr>
-    `).join('');
+    allTopSkus = data.topSkus;
+    pageState.topSku = 1;
+    renderTopSkuTable();
   }
   if (data.activeUsers) {
-    document.querySelector('#activeUserTable tbody').innerHTML = data.activeUsers.map(r => `
-      <tr><td>${r.phone}</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
-    `).join('');
+    allActiveUsers = data.activeUsers;
+    pageState.activeUser = 1;
+    renderActiveUserTable();
   }
   if (data.salesByRepMonth) {
     salesByRepMonthData = data.salesByRepMonth;
