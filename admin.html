@@ -72,9 +72,22 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 </div>
 
 <script>
+// ⚠️ 이 값을 실제 백엔드 주소로 바꿔주세요 (tronic_field_order.html의 BACKEND_API_URL과 동일해야 합니다)
 const API_BASE = 'https://premium-k-backend.vercel.app/api';
 
 let token = localStorage.getItem('pk_token');
+
+// 고객이 직접 입력하는 값(이메일/상호명/주소/영업사원명/SKU 등)을 화면에 그대로 꽂아 넣으면
+// 악성 스크립트가 실행될 수 있어(저장형 XSS), 화면에 표시하기 전에 반드시 이 함수로 이스케이프합니다.
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
@@ -123,8 +136,8 @@ function renderUserTable(){
   const tbody = document.querySelector('#userTable tbody');
   tbody.innerHTML = allUsers.slice(start, start+PAGE_SIZE).map(u => `
     <tr>
-      <td>${u.phone}</td><td>${u.email||'—'}</td><td>${u.company_name||'—'}</td><td>${u.address||'—'}</td>
-      <td>${u.rep_name||'—'}</td>
+      <td>${escapeHtml(u.phone)}</td><td>${escapeHtml(u.email)||'—'}</td><td>${escapeHtml(u.company_name)||'—'}</td><td>${escapeHtml(u.address)||'—'}</td>
+      <td>${escapeHtml(u.rep_name)||'—'}</td>
       <td><span class="pill ${u.approved?'approved':'pending'}">${u.approved?'승인됨':'대기중'}</span></td>
       <td>${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
       <td style="white-space:nowrap;">
@@ -151,12 +164,13 @@ async function setApproved(userId, approved) {
 }
 
 async function resetPassword(userId, phone) {
+  // 6자리 임시 비밀번호를 자동으로 만들어서, 관리자가 바로 고객에게 전달할 수 있게 합니다.
   const autoPassword = String(Math.floor(100000 + Math.random() * 900000));
   const newPassword = prompt(
     `${phone} 고객의 새 비밀번호(숫자 6자리)를 입력하세요.\n그냥 확인만 누르면 자동 생성된 번호로 설정됩니다.`,
     autoPassword
   );
-  if (newPassword === null) return;
+  if (newPassword === null) return; // 취소
   if (!/^[0-9]{6}$/.test(newPassword)) { alert('비밀번호는 숫자 6자리여야 합니다.'); return; }
 
   try {
@@ -183,7 +197,7 @@ function goTopSkuPage(p){ pageState.topSku = p; renderTopSkuTable(); }
 function renderTopSkuTable(){
   const start = (pageState.topSku-1)*PAGE_SIZE;
   document.querySelector('#topSkuTable tbody').innerHTML = allTopSkus.slice(start, start+PAGE_SIZE).map(r => `
-    <tr><td>${r.sku}</td><td>${r.event_type}</td><td>${r.n}</td></tr>
+    <tr><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.event_type)}</td><td>${r.n}</td></tr>
   `).join('');
   renderPager('topSkuPager', allTopSkus.length, 'topSku', 'goTopSkuPage');
 }
@@ -202,7 +216,7 @@ async function loadInsights() {
   const data = await api('/admin/insights' + (phone ? `?phone=${encodeURIComponent(phone)}` : ''));
   if (data.events) {
     document.querySelector('#insightTable tbody').innerHTML = data.events.map(e => `
-      <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${e.event_type}</td><td>${e.sku||'—'}</td><td>${e.detail?JSON.stringify(e.detail):'—'}</td></tr>
+      <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.sku)||'—'}</td><td>${e.detail?escapeHtml(JSON.stringify(e.detail)):'—'}</td></tr>
     `).join('');
   }
   if (data.topSkus) {
@@ -232,7 +246,7 @@ function renderRepSalesTable() {
   const tbody = document.querySelector('#repSalesTable tbody');
   if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4">해당 월 주문 없음</td></tr>'; return; }
   tbody.innerHTML = rows.map(r => `
-    <tr><td>${r.repName}</td><td>${r.orderCount}</td><td>$${r.totalSales.toFixed(2)}</td><td style="color:var(--green,#1E7A46);font-weight:700;">$${r.incentive.toFixed(2)}</td></tr>
+    <tr><td>${escapeHtml(r.repName)}</td><td>${r.orderCount}</td><td>$${r.totalSales.toFixed(2)}</td><td style="color:var(--green,#1E7A46);font-weight:700;">$${r.incentive.toFixed(2)}</td></tr>
   `).join('');
   const monthTotal = rows.reduce((s,r)=>s+r.totalSales,0);
   const monthIncentive = rows.reduce((s,r)=>s+r.incentive,0);
