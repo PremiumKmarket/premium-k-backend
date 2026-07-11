@@ -1,6 +1,14 @@
 // api/auth/reset.js
+// Customer taps "비밀번호를 잊으셨나요?" → enters the phone number they want
+// reset → we email the ADMIN that phone number. The admin then opens
+// admin.html, finds that phone number, and sets a new password directly —
+// no reset link/token needed. Simpler for everyone: the customer doesn't
+// need email access at all, and the admin can just call/text them the
+// new password.
+
 const db = require('../../lib/db');
 const { sendEmail } = require('../../lib/emailjs');
+const { sendSms, toE164US } = require('../../lib/sms');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -29,18 +37,33 @@ module.exports = async (req, res) => {
     const { rows } = await db.query('SELECT id, email, company_name FROM users WHERE phone = $1', [cleanPhone]);
     const user = rows[0];
 
+    // 등록되지 않은 번호여도 같은 응답을 줍니다 (등록 여부를 외부에서 추측 못 하도록).
     if (user) {
+      const adminEmailMsg =
+        `고객이 비밀번호 재설정을 요청했습니다.\n\n` +
+        `휴대폰번호 : ${cleanPhone}\n` +
+        `상호명     : ${user.company_name || '—'}\n` +
+        `등록된 이메일 : ${user.email || '—'}\n\n` +
+        `관리자 페이지(admin.html)에서 이 번호를 찾아 새 비밀번호를 직접 입력해서 재설정해주세요.\n` +
+        `설정 후 고객에게 새 비밀번호를 전화/문자로 알려주세요.`;
+
       await sendEmail({
-        toEmail: user.email,
+        toEmail: process.env.ADMIN_NOTIFY_EMAIL || 'info@tronicholdings.com',
         label: `[비밀번호 재설정 요청] ${cleanPhone}`,
-        message:
-          `고객이 비밀번호 재설정을 요청했습니다.\n\n` +
-          `휴대폰번호 : ${cleanPhone}\n` +
-          `상호명     : ${user.company_name || '—'}\n` +
-          `등록된 이메일 : ${user.email || '—'}\n\n` +
-          `관리자 페이지(admin.html)에서 이 번호를 찾아 새 비밀번호를 직접 입력해서 재설정해주세요.\n` +
-          `설정 후 고객에게 새 비밀번호를 전화/문자로 알려주세요.`,
-      });
+        message: adminEmailMsg,
+      }).catch((e) => console.error('[reset] admin email failed:', e.message));
+
+      const adminPhone = toE164US(process.env.ADMIN_PHONE_NUMBER);
+      if (adminPhone) {
+        await sendSms({
+          to: adminPhone,
+          body:
+            `[Premium K] Password reset requested 비밀번호 재설정 요청\n` +
+            `Phone 전화번호: ${cleanPhone}\n` +
+            `Company 상호명: ${user.company_name || '—'}\n` +
+            `Reset at: https://premium-k-backend.vercel.app/admin.html`,
+        }).catch((e) => console.error('[reset] admin SMS failed:', e.message));
+      }
     }
 
     return res.json({ message: successMsg });
