@@ -39,6 +39,7 @@ module.exports = async (req, res) => {
     return res.json({
       token,
       approved: user.approved,
+      tier: user.tier,
       email: user.email,
       companyName: user.company_name,
       isAdmin: user.is_admin,
