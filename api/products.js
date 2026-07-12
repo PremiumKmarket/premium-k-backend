@@ -1,6 +1,15 @@
 // api/products.js
+// Returns the full catalog FROM THE DATABASE (previously a static JSON
+// file that required a code deploy to change — now the admin can edit
+// prices/products directly via api/admin/products.js + the admin page).
+//
+// If the caller has a valid, APPROVED session, real prices are included.
+// Otherwise, prices are stripped and replaced with a `locked: true` flag
+// so the frontend can show the blinking "login to see price" prompt.
+
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const db = require('../lib/db');
+const { applyTierPricingToAll, DEFAULT_TIER } = require('../lib/pricing');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -50,13 +59,20 @@ module.exports = async (req, res) => {
     const togoPageImages = {};
     imgRows.forEach(r => { togoPageImages[r.page_number] = r.img; });
 
-    const outProducts = canSeePrices ? products : products.map(stripPrices);
+    // 승인된 고객에게만 가격을 보여주되, 그 고객의 등급(tier)에 맞춰
+    // 박스단가를 조정합니다 (Tier1=기존가, Tier2=+10%, Tier3=+15%).
+    const tieredProducts = canSeePrices
+      ? applyTierPricingToAll(products, user.tier || DEFAULT_TIER)
+      : products;
+
+    const outProducts = canSeePrices ? tieredProducts : tieredProducts.map(stripPrices);
 
     return res.json({
       products: outProducts,
       togoPageImages,
       pricesVisible: canSeePrices,
       approved: user ? user.approved : null,
+      tier: user ? (user.tier || DEFAULT_TIER) : null,
     });
   } catch (err) {
     console.error(err);
