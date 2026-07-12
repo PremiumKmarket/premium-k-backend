@@ -140,8 +140,8 @@ function tierSelectHtml(u) {
     `<option value="${t}" ${t === current ? 'selected' : ''}>${TIER_LABELS[t]}</option>`
   ).join('');
   if (u.approved) {
-    // 이미 승인된 고객: 바로 등급을 바꿀 수 있음 (선택 즉시 저장)
-    return `<select onchange="changeTier('${u.id}', this.value)">${options}</select>`;
+    // 이미 승인된 고객: 등급을 바꾸면 확인창이 뜨고, 확인해야만 실제로 저장됨
+    return `<select onchange="confirmTierChange('${u.id}', this)">${options}</select>`;
   }
   // 승인 대기중: 승인 버튼을 누를 때 이 선택값으로 등급이 함께 저장됨 (기본 Tier 3)
   return `<select id="tierSelect-${u.id}">${options}</select>`;
@@ -180,6 +180,26 @@ async function setApproved(userId, approved, tier) {
   if (approved && tier) body.tier = tier;
   await api('/admin/users', { method:'POST', body: JSON.stringify(body) });
   loadUsers();
+}
+
+// 등급 드롭다운을 바꾸면 바로 저장하지 않고, 어떤 고객을 어느 등급으로
+// 바꾸는지 확인창을 띄웁니다. 취소하면 드롭다운을 원래 값으로 되돌립니다.
+// (여러 명을 한 번에 바꿀 때 실수로 잘못 누르는 걸 막기 위함)
+function confirmTierChange(userId, selectEl) {
+  const newTier = selectEl.value;
+  const user = allUsers.find(u => u.id === userId);
+  const prevTier = user ? (user.tier || 'tier3') : newTier;
+  if (newTier === prevTier) return;
+
+  const who = user ? (user.company_name ? `${user.phone} (${user.company_name})` : user.phone) : userId;
+  const ok = confirm(
+    `${who} 고객을 ${TIER_LABELS[prevTier]} → ${TIER_LABELS[newTier]} 로 변경하시겠습니까?\n\n확인을 누르면 즉시 적용됩니다.`
+  );
+  if (!ok) {
+    selectEl.value = prevTier; // 취소하면 원래 값으로 되돌림
+    return;
+  }
+  changeTier(userId, newTier);
 }
 
 async function changeTier(userId, tier) {
