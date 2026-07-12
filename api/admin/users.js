@@ -1,8 +1,17 @@
 // api/admin/users.js
+// GET    -> list all users (pending first) — requires an admin session
+// POST   -> { userId, approved: true|false } — approve or revoke a user
+//        -> { userId, newPassword: '123456' } — admin directly sets a new
+//           password for that user (used for the "forgot password" flow —
+//           see api/auth/reset.js, which just emails the admin the phone
+//           number; the admin resets it here and tells the customer)
+// DELETE -> { userId } — permanently delete a user account
+
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 const { sendSms, toE164US } = require('../../lib/sms');
+const { normalizeTier, DEFAULT_TIER } = require('../../lib/pricing');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -26,14 +35,14 @@ module.exports = async (req, res) => {
 
   if (req.method === 'GET') {
     const { rows } = await db.query(
-      `SELECT id, phone, email, company_name, address, rep_name, approved, is_admin, created_at, approved_at
+      `SELECT id, phone, email, company_name, address, rep_name, tier, approved, is_admin, created_at, approved_at
        FROM users ORDER BY approved ASC, created_at DESC`
     );
     return res.json({ users: rows });
   }
 
   if (req.method === 'POST') {
-    const { userId, approved, newPassword } = req.body;
+    const { userId, approved, newPassword, tier } = req.body;
 
     if (newPassword !== undefined) {
       if (!/^[0-9]{6}$/.test(newPassword)) {
@@ -45,15 +54,35 @@ module.exports = async (req, res) => {
         [passwordHash, userId]
       );
       if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      // 비밀번호가 바뀌면 기존 로그인 세션은 전부 무효화 (보안)
       await db.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
       return res.json({ user: rows[0], message: '비밀번호가 재설정되었습니다.' });
     }
 
-    const { rows } = await db.query(
-      `UPDATE users SET approved = $1, approved_at = CASE WHEN $1 THEN now() ELSE NULL END
-       WHERE id = $2 RETURNING id, phone, approved`,
-      [!!approved, userId]
-    );
+    // 승인 상태는 그대로 두고 등급(tier)만 바꾸는 경우 (기존 고객 등급 변경)
+    if (approved === undefined && tier !== undefined) {
+      const t = normalizeTier(tier);
+      const { rows } = await db.query(
+        'UPDATE users SET tier = $1 WHERE id = $2 RETURNING id, phone, tier',
+        [t, userId]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      return res.json({ user: rows[0] });
+    }
+
+    // 승인 처리. 승인 시 등급을 함께 지정할 수 있으며(기본값 Tier 3),
+    // 승인취소(approved:false) 시에는 등급을 건드리지 않습니다.
+    const { rows } = approved
+      ? await db.query(
+          `UPDATE users SET approved = true, approved_at = now(), tier = $1
+           WHERE id = $2 RETURNING id, phone, approved, tier`,
+          [normalizeTier(tier || DEFAULT_TIER), userId]
+        )
+      : await db.query(
+          `UPDATE users SET approved = false, approved_at = NULL
+           WHERE id = $1 RETURNING id, phone, approved, tier`,
+          [userId]
+        );
     if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
 
     if (approved) {
