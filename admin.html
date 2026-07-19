@@ -132,7 +132,7 @@ function renderPager(pagerId, dataLen, key, onChangeFn) {
 
 function goUserPage(p){ pageState.user = p; renderUserTable(); }
 
-const TIER_LABELS = { tier1: 'Tier 1', tier2: 'Tier 2', tier3: 'Tier 3' };
+const TIER_LABELS = { tier1: 'Platinum 플래티늄', tier2: 'Gold 골드', tier3: 'Silver 실버' };
 
 function tierSelectHtml(u) {
   const current = u.tier || 'tier3';
