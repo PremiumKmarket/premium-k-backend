@@ -73,7 +73,7 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 
   <div class="card">
     <h2 style="font-size:14px;">최근 30일 활발한 고객 (최근 접속순)</h2>
-    <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동순위</th><th>접속횟수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
+    <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동순위</th><th>방문횟수</th><th>마지막 방문 체류시간</th><th>평균 체류시간</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
     <div class="pager" id="activeUserPager"></div>
     <button onclick="exportActiveUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
   </div>
@@ -178,8 +178,7 @@ const TIER_LABELS = { tier1: 'Platinum 플래티늄', tier2: 'Gold 골드', tier
 function tierSelectHtml(u) {
   const current = u.tier || 'tier3';
   const options = ['tier1', 'tier2', 'tier3'].map(t =>
-
-                                                  `<option value="${t}" ${t === current ? 'selected' : ''}>${TIER_LABELS[t]}</option>`
+    `<option value="${t}" ${t === current ? 'selected' : ''}>${TIER_LABELS[t]}</option>`
   ).join('');
   if (u.approved) {
     // 이미 승인된 고객: 등급을 바꾸면 확인창이 뜨고, 확인해야만 실제로 저장됨
@@ -309,11 +308,21 @@ function openViewersModal(key, title) {
 }
 function closeViewersModal(){ document.getElementById('viewersModal').classList.remove('open'); }
 
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '—';
+  const s = Math.round(Number(seconds));
+  if (s < 60) return `${s}초`;
+  const m = Math.floor(s / 60), r = s % 60;
+  if (m < 60) return r ? `${m}분 ${r}초` : `${m}분`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm ? `${h}시간 ${rm}분` : `${h}시간`;
+}
+
 function goActiveUserPage(p){ pageState.activeUser = p; renderActiveUserTable(); }
 function renderActiveUserTable(){
   const start = (pageState.activeUser-1)*PAGE_SIZE;
   document.querySelector('#activeUserTable tbody').innerHTML = allActiveUsers.slice(start, start+PAGE_SIZE).map(r => `
-    <tr><td>${r.phone}</td><td>${r.activity_rank}위</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
+    <tr><td>${r.phone}</td><td>${r.activity_rank}위</td><td>${r.visit_count}</td><td>${formatDuration(r.last_visit_seconds)}</td><td>${formatDuration(r.avg_visit_seconds)}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
   `).join('');
   renderPager('activeUserPager', allActiveUsers.length, 'activeUser', 'goActiveUserPage');
 }
@@ -379,8 +388,8 @@ function exportUsersCsv() {
 }
 
 function exportActiveUsersCsv() {
-  const headers = ['전화번호','활동순위','접속횟수','마지막 접속'];
-  const rows = allActiveUsers.map(r => [r.phone, r.activity_rank, r.events, new Date(r.last_seen).toLocaleString('ko-KR')]);
+  const headers = ['전화번호','활동순위','방문횟수','마지막 방문 체류시간(초)','평균 체류시간(초)','마지막 접속'];
+  const rows = allActiveUsers.map(r => [r.phone, r.activity_rank, r.visit_count, r.last_visit_seconds ?? '', r.avg_visit_seconds ?? '', new Date(r.last_seen).toLocaleString('ko-KR')]);
   downloadCsv('활발한고객_최근30일.csv', headers, rows);
 }
 
@@ -409,7 +418,7 @@ async function loadInsights() {
     document.querySelector('#insightTable tbody').innerHTML = data.events.map(e => `
       <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.sku)||'—'}</td><td>${e.detail?escapeHtml(JSON.stringify(e.detail)):'—'}</td></tr>
     `).join('');
-  }
+    }
   if (data.topSkuViewers) {
     topSkuViewerMap = {};
     data.topSkuViewers.forEach(v => {
