@@ -21,6 +21,13 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 .pager button{padding:5px 12px;font-size:12px;}
 .pager button:disabled{opacity:0.35;cursor:default;}
 .pager span{font-size:12px;color:#5B6272;}
+.chart-wrap{display:flex;align-items:flex-end;gap:6px;height:160px;padding-top:20px;overflow-x:auto;}
+.chart-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:36px;}
+.chart-bar{width:100%;max-width:28px;background:linear-gradient(180deg,#3E5C99,#0B1B33);border-radius:4px 4px 0 0;position:relative;}
+.chart-bar-value{font-size:10px;color:#0B1B33;margin-bottom:3px;white-space:nowrap;}
+.chart-bar-label{font-size:10px;color:#5B6272;margin-top:6px;white-space:nowrap;}
+.pill.dormant60{background:#FCE8E6;color:#9B2C1F;}
+.pill.dormant30{background:#FFF3E9;color:#8A4B00;}
 </style>
 </head>
 <body>
@@ -43,6 +50,7 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
     <h2 style="font-size:14px;">회원 승인 관리</h2>
     <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>담당영업사원</th><th>등급</th><th>상태</th><th>가입일</th><th></th></tr></thead><tbody></tbody></table>
     <div class="pager" id="userPager"></div>
+    <button onclick="exportUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
   </div>
 
   <div class="card">
@@ -62,12 +70,31 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
     <h2 style="font-size:14px;">최근 30일 활발한 고객 (최근 접속순)</h2>
     <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동순위</th><th>접속횟수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
     <div class="pager" id="activeUserPager"></div>
+    <button onclick="exportActiveUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
   </div>
 
   <div class="card">
     <h2 style="font-size:14px;">영업사원별 매출 / 인센티브 (5%)</h2>
     <select id="repSalesMonth" onchange="renderRepSalesTable()" style="margin-bottom:8px;"></select>
     <table id="repSalesTable"><thead><tr><th>영업사원</th><th>주문건수</th><th>총 매출</th><th>인센티브 (5%)</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">월별 매출 추이 (최근 12개월)</h2>
+    <div id="revenueChart" class="chart-wrap"></div>
+    <button onclick="exportMonthlyRevenueCsv()" style="margin-top:10px;">CSV 내보내기</button>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">고객별 총 구매액 랭킹</h2>
+    <table id="rankingTable"><thead><tr><th>순위</th><th>전화번호</th><th>상호명</th><th>주문건수</th><th>총 구매액</th></tr></thead><tbody></tbody></table>
+    <button onclick="exportRankingCsv()" style="margin-top:10px;">CSV 내보내기</button>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:14px;">휴면 고객 (30일 이상 미접속)</h2>
+    <table id="dormantTable"><thead><tr><th>전화번호</th><th>상호명</th><th>가입일</th><th>마지막 접속</th><th>상태</th></tr></thead><tbody></tbody></table>
+    <button onclick="exportDormantCsv()" style="margin-top:10px;">CSV 내보내기</button>
   </div>
 </div>
 
@@ -117,7 +144,7 @@ async function adminLogin() {
 
 const PAGE_SIZE = 10;
 const pageState = { user: 1, topSku: 1, activeUser: 1 };
-let allUsers = [], allTopSkus = [], allActiveUsers = [];
+let allUsers = [], allTopSkus = [], allActiveUsers = [], allDormantCustomers = [], allCustomerRanking = [], monthlyRevenueData = [];
 
 function renderPager(pagerId, dataLen, key, onChangeFn) {
   const totalPages = Math.max(1, Math.ceil(dataLen / PAGE_SIZE));
@@ -218,7 +245,7 @@ async function resetPassword(userId, phone) {
   const newPassword = prompt(
     `${phone} 고객의 새 비밀번호(숫자 6자리)를 입력하세요.\n그냥 확인만 누르면 자동 생성된 번호로 설정됩니다.`,
     autoPassword
-    );
+  );
   if (newPassword === null) return; // 취소
   if (!/^[0-9]{6}$/.test(newPassword)) { alert('비밀번호는 숫자 6자리여야 합니다.'); return; }
 
@@ -260,6 +287,90 @@ function renderActiveUserTable(){
   renderPager('activeUserPager', allActiveUsers.length, 'activeUser', 'goActiveUserPage');
 }
 
+function dormancyPill(lastSeen) {
+  if (!lastSeen) return `<span class="pill dormant60">활동기록 없음</span>`;
+  const days = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86400000);
+  if (days >= 60) return `<span class="pill dormant60">${days}일 미접속</span>`;
+  return `<span class="pill dormant30">${days}일 미접속</span>`;
+}
+
+function renderDormantTable(){
+  document.querySelector('#dormantTable tbody').innerHTML = allDormantCustomers.map(r => `
+    <tr>
+      <td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.company_name)||'—'}</td>
+      <td>${new Date(r.joined_at).toLocaleDateString('ko-KR')}</td>
+      <td>${r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '—'}</td>
+      <td>${dormancyPill(r.last_seen)}</td>
+    </tr>`).join('') || '<tr><td colspan="5">휴면 고객이 없습니다.</td></tr>';
+}
+
+function renderRankingTable(){
+  document.querySelector('#rankingTable tbody').innerHTML = allCustomerRanking.map((r, i) => `
+    <tr>
+      <td>${i+1}</td><td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.customer_name)||'—'}</td>
+      <td>${r.order_count}</td><td>$${Number(r.total_spent).toFixed(2)}</td>
+    </tr>`).join('') || '<tr><td colspan="5">주문 기록이 없습니다.</td></tr>';
+}
+
+function renderRevenueChart(){
+  const wrap = document.getElementById('revenueChart');
+  if (!monthlyRevenueData.length) { wrap.innerHTML = '<div style="font-size:12px;color:#5B6272;">최근 12개월 주문 데이터가 없습니다.</div>'; return; }
+  const max = Math.max(...monthlyRevenueData.map(r => r.totalSales), 1);
+  wrap.innerHTML = monthlyRevenueData.map(r => `
+    <div class="chart-bar-col">
+      <div class="chart-bar-value">$${Math.round(r.totalSales).toLocaleString()}</div>
+      <div class="chart-bar" style="height:${Math.max(4, Math.round(r.totalSales / max * 130))}px;" title="${r.month}: $${r.totalSales.toFixed(2)} (${r.orderCount}건)"></div>
+      <div class="chart-bar-label">${r.month}</div>
+    </div>`).join('');
+}
+
+// ===== CSV 내보내기 =====
+// Excel에서 한글이 깨지지 않도록 BOM을 앞에 붙여줍니다.
+function downloadCsv(filename, headers, rows) {
+  const esc = v => {
+    const s = (v === null || v === undefined) ? '' : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [headers.map(esc).join(',')].concat(rows.map(r => r.map(esc).join(',')));
+  const csv = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportUsersCsv() {
+  const headers = ['전화번호','이메일','상호명','주소','담당영업사원','등급','상태','가입일'];
+  const rows = allUsers.map(u => [u.phone, u.email||'', u.company_name||'', u.address||'', u.rep_name||'', TIER_LABELS[u.tier||'tier3'], u.approved?'승인됨':'대기중', new Date(u.created_at).toLocaleDateString('ko-KR')]);
+  downloadCsv('회원목록.csv', headers, rows);
+}
+
+function exportActiveUsersCsv() {
+  const headers = ['전화번호','활동순위','접속횟수','마지막 접속'];
+  const rows = allActiveUsers.map(r => [r.phone, r.activity_rank, r.events, new Date(r.last_seen).toLocaleString('ko-KR')]);
+  downloadCsv('활발한고객_최근30일.csv', headers, rows);
+}
+
+function exportDormantCsv() {
+  const headers = ['전화번호','상호명','가입일','마지막 접속'];
+  const rows = allDormantCustomers.map(r => [r.phone, r.company_name||'', new Date(r.joined_at).toLocaleDateString('ko-KR'), r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '활동기록 없음']);
+  downloadCsv('휴면고객.csv', headers, rows);
+}
+
+function exportRankingCsv() {
+  const headers = ['순위','전화번호','상호명','주문건수','총 구매액'];
+  const rows = allCustomerRanking.map((r, i) => [i+1, r.phone, r.customer_name||'', r.order_count, Number(r.total_spent).toFixed(2)]);
+  downloadCsv('고객별_구매액랭킹.csv', headers, rows);
+}
+
+function exportMonthlyRevenueCsv() {
+  const headers = ['월','주문건수','총 매출'];
+  const rows = monthlyRevenueData.map(r => [r.month, r.orderCount, r.totalSales.toFixed(2)]);
+  downloadCsv('월별매출추이.csv', headers, rows);
+}
+
 async function loadInsights() {
   const phone = document.getElementById('insightPhone').value.trim();
   const data = await api('/admin/insights' + (phone ? `?phone=${encodeURIComponent(phone)}` : ''));
@@ -277,6 +388,18 @@ async function loadInsights() {
     allActiveUsers = data.activeUsers;
     pageState.activeUser = 1;
     renderActiveUserTable();
+  }
+  if (data.dormantCustomers) {
+    allDormantCustomers = data.dormantCustomers;
+    renderDormantTable();
+  }
+  if (data.customerRanking) {
+    allCustomerRanking = data.customerRanking;
+    renderRankingTable();
+  }
+  if (data.monthlyRevenue) {
+    monthlyRevenueData = data.monthlyRevenue;
+    renderRevenueChart();
   }
   if (data.salesByRepMonth) {
     salesByRepMonthData = data.salesByRepMonth;
