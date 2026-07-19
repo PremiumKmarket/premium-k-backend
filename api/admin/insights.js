@@ -49,6 +49,21 @@ module.exports = async (req, res) => {
     LIMIT 50
   `);
 
+  // 인기 상품별로 실제 조회/장바구니에 담은 고객 목록 (관리자 화면에서 "전체보기"용)
+  const { rows: topSkuViewersRaw } = await db.query(`
+    SELECT sku, event_type, phone, max(created_at) AS last_interacted
+    FROM behavior_events
+    WHERE sku IS NOT NULL AND phone IS NOT NULL AND created_at > now() - interval '30 days'
+    GROUP BY sku, event_type, phone
+    ORDER BY sku, event_type, last_interacted DESC
+  `);
+  const topSkuViewers = topSkuViewersRaw.map(r => ({
+    sku: r.sku,
+    eventType: r.event_type,
+    phone: r.phone,
+    lastInteracted: r.last_interacted,
+  }));
+
   // 휴면 고객: 승인된 고객인데 behavior_events 기록이 30일 넘게 없는 경우
   // (한 번도 활동 기록이 없는 경우도 포함 — last_seen이 null)
   const { rows: dormantCustomers } = await db.query(`
@@ -112,5 +127,5 @@ module.exports = async (req, res) => {
     incentive: Math.round(Number(r.total_sales) * 0.05 * 100) / 100, // 주문 총액의 5% 인센티브
   }));
 
-  return res.json({ topSkus: rows, activeUsers, salesByRepMonth, dormantCustomers, customerRanking, monthlyRevenue });
+  return res.json({ topSkus: rows, topSkuViewers, activeUsers, salesByRepMonth, dormantCustomers, customerRanking, monthlyRevenue });
 };
