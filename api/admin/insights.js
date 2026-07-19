@@ -39,11 +39,45 @@ module.exports = async (req, res) => {
     ORDER BY n DESC
     LIMIT 50
   `);
+  // ===== 정확한 "방문(세션)" 재구성 =====
+  // 기존에는 이벤트 건수를 그냥 셌는데, 그러면 한 번 들어와서 상품을 10개 본 사람과
+  // 10번 따로 들어와서 1개씩 본 사람이 똑같이 "10"으로 보이는 문제가 있었습니다.
+  // 그래서 같은 고객의 이벤트를 시간순으로 보다가 30분 이상 공백이 있으면 새로운
+  // 방문(세션)으로 구분합니다 (웹 분석에서 흔히 쓰는 표준적인 방식).
+  // 방문당 체류시간은 그 방문 안의 첫 이벤트~마지막 이벤트 사이 시간으로 근사합니다.
+  // (마지막 클릭 이후 화면을 계속 보고 있던 시간까지는 알 수 없다는 한계는 있습니다.)
   const { rows: activeUsers } = await db.query(`
-    SELECT phone, count(*) AS events, max(created_at) AS last_seen,
+    WITH ordered AS (
+      SELECT phone, created_at,
+             LAG(created_at) OVER (PARTITION BY phone ORDER BY created_at) AS prev_at
+      FROM behavior_events
+      WHERE phone IS NOT NULL AND created_at > now() - interval '30 days'
+    ),
+    flagged AS (
+      SELECT phone, created_at,
+             CASE WHEN prev_at IS NULL OR created_at - prev_at > interval '30 minutes'
+                  THEN 1 ELSE 0 END AS is_new_visit
+      FROM ordered
+    ),
+    visit_ids AS (
+      SELECT phone, created_at,
+             SUM(is_new_visit) OVER (PARTITION BY phone ORDER BY created_at) AS visit_seq
+      FROM flagged
+    ),
+    visits AS (
+      SELECT phone, visit_seq,
+             min(created_at) AS visit_start,
+             max(created_at) AS visit_end
+      FROM visit_ids
+      GROUP BY phone, visit_seq
+    )
+    SELECT phone,
+           count(*) AS visit_count,
+           max(visit_end) AS last_seen,
+           round(avg(extract(epoch FROM (visit_end - visit_start)))) AS avg_visit_seconds,
+           (array_agg(extract(epoch FROM (visit_end - visit_start)) ORDER BY visit_end DESC))[1] AS last_visit_seconds,
            RANK() OVER (ORDER BY count(*) DESC) AS activity_rank
-    FROM behavior_events
-    WHERE phone IS NOT NULL AND created_at > now() - interval '30 days'
+    FROM visits
     GROUP BY phone
     ORDER BY last_seen DESC
     LIMIT 50
