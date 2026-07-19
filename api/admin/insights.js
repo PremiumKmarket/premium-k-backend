@@ -1,4 +1,7 @@
 // api/admin/insights.js
+// GET /api/admin/insights?phone=... -> recent behavior events for one customer
+// GET /api/admin/insights -> most-viewed / most-added products across everyone (last 30 days)
+
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 
@@ -28,18 +31,22 @@ module.exports = async (req, res) => {
   }
 
   const { rows } = await db.query(`
-    SELECT sku, event_type, count(*) AS n
-    FROM behavior_events
-    WHERE sku IS NOT NULL AND created_at > now() - interval '30 days'
-    GROUP BY sku, event_type
+    SELECT COALESCE(p.name_ko, be.sku) AS product_name, be.sku, be.event_type, count(*) AS n
+    FROM behavior_events be
+    LEFT JOIN products p ON p.sku = be.sku
+    WHERE be.sku IS NOT NULL AND be.created_at > now() - interval '30 days'
+    GROUP BY p.name_ko, be.sku, be.event_type
     ORDER BY n DESC
     LIMIT 50
   `);
   const { rows: activeUsers } = await db.query(`
-    SELECT phone, count(*) AS events, max(created_at) AS last_seen
+    SELECT phone, count(*) AS events, max(created_at) AS last_seen,
+           RANK() OVER (ORDER BY count(*) DESC) AS activity_rank
     FROM behavior_events
     WHERE phone IS NOT NULL AND created_at > now() - interval '30 days'
-    GROUP BY phone ORDER BY events DESC LIMIT 50
+    GROUP BY phone
+    ORDER BY last_seen DESC
+    LIMIT 50
   `);
 
   // 영업사원(rep_name)별 · 월별 매출 집계 + 5% 인센티브 계산
@@ -58,7 +65,7 @@ module.exports = async (req, res) => {
     month: r.month,
     orderCount: Number(r.order_count),
     totalSales: Number(r.total_sales),
-    incentive: Math.round(Number(r.total_sales) * 0.05 * 100) / 100,
+    incentive: Math.round(Number(r.total_sales) * 0.05 * 100) / 100, // 주문 총액의 5% 인센티브
   }));
 
   return res.json({ topSkus: rows, activeUsers, salesByRepMonth });
