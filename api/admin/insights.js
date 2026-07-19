@@ -49,6 +49,50 @@ module.exports = async (req, res) => {
     LIMIT 50
   `);
 
+  // 휴면 고객: 승인된 고객인데 behavior_events 기록이 30일 넘게 없는 경우
+  // (한 번도 활동 기록이 없는 경우도 포함 — last_seen이 null)
+  const { rows: dormantCustomers } = await db.query(`
+    WITH last_activity AS (
+      SELECT phone, max(created_at) AS last_seen
+      FROM behavior_events
+      GROUP BY phone
+    )
+    SELECT u.phone, u.company_name, u.created_at AS joined_at, la.last_seen
+    FROM users u
+    LEFT JOIN last_activity la ON la.phone = u.phone
+    WHERE u.approved = true
+      AND (la.last_seen IS NULL OR la.last_seen < now() - interval '30 days')
+    ORDER BY la.last_seen ASC NULLS FIRST
+    LIMIT 100
+  `);
+
+  // 고객별 총 구매액 랭킹 (전체 기간 누적)
+  const { rows: customerRanking } = await db.query(`
+    SELECT phone, max(customer_name) AS customer_name,
+           count(*) AS order_count, COALESCE(sum(total), 0) AS total_spent
+    FROM orders
+    WHERE phone IS NOT NULL
+    GROUP BY phone
+    ORDER BY total_spent DESC
+    LIMIT 100
+  `);
+
+  // 월별 매출 추이 (최근 12개월)
+  const { rows: monthlyRevenueRaw } = await db.query(`
+    SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
+           count(*) AS order_count,
+           COALESCE(sum(total), 0) AS total_sales
+    FROM orders
+    WHERE created_at > now() - interval '12 months'
+    GROUP BY month
+    ORDER BY month ASC
+  `);
+  const monthlyRevenue = monthlyRevenueRaw.map(r => ({
+    month: r.month,
+    orderCount: Number(r.order_count),
+    totalSales: Number(r.total_sales),
+  }));
+
   // 영업사원(rep_name)별 · 월별 매출 집계 + 5% 인센티브 계산
   const { rows: byRepMonth } = await db.query(`
     SELECT rep_name,
@@ -68,5 +112,5 @@ module.exports = async (req, res) => {
     incentive: Math.round(Number(r.total_sales) * 0.05 * 100) / 100, // 주문 총액의 5% 인센티브
   }));
 
-  return res.json({ topSkus: rows, activeUsers, salesByRepMonth });
+  return res.json({ topSkus: rows, activeUsers, salesByRepMonth, dormantCustomers, customerRanking, monthlyRevenue });
 };
