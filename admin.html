@@ -54,13 +54,13 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 
   <div class="card">
     <h2 style="font-size:14px;">최근 30일 인기 상품 (조회/장바구니 기준)</h2>
-    <table id="topSkuTable"><thead><tr><th>SKU</th><th>행동</th><th>횟수</th></tr></thead><tbody></tbody></table>
+    <table id="topSkuTable"><thead><tr><th>상품명</th><th>행동</th><th>횟수</th></tr></thead><tbody></tbody></table>
     <div class="pager" id="topSkuPager"></div>
   </div>
 
   <div class="card">
-    <h2 style="font-size:14px;">최근 30일 활발한 고객</h2>
-    <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
+    <h2 style="font-size:14px;">최근 30일 활발한 고객 (최근 접속순)</h2>
+    <table id="activeUserTable"><thead><tr><th>전화번호</th><th>활동순위</th><th>접속횟수</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
     <div class="pager" id="activeUserPager"></div>
   </div>
 
@@ -218,7 +218,7 @@ async function resetPassword(userId, phone) {
   const newPassword = prompt(
     `${phone} 고객의 새 비밀번호(숫자 6자리)를 입력하세요.\n그냥 확인만 누르면 자동 생성된 번호로 설정됩니다.`,
     autoPassword
-  );
+    );
   if (newPassword === null) return; // 취소
   if (!/^[0-9]{6}$/.test(newPassword)) { alert('비밀번호는 숫자 6자리여야 합니다.'); return; }
 
@@ -246,7 +246,7 @@ function goTopSkuPage(p){ pageState.topSku = p; renderTopSkuTable(); }
 function renderTopSkuTable(){
   const start = (pageState.topSku-1)*PAGE_SIZE;
   document.querySelector('#topSkuTable tbody').innerHTML = allTopSkus.slice(start, start+PAGE_SIZE).map(r => `
-    <tr><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.event_type)}</td><td>${r.n}</td></tr>
+    <tr><td>${escapeHtml(r.product_name)}</td><td>${escapeHtml(r.event_type)}</td><td>${r.n}</td></tr>
   `).join('');
   renderPager('topSkuPager', allTopSkus.length, 'topSku', 'goTopSkuPage');
 }
@@ -255,7 +255,7 @@ function goActiveUserPage(p){ pageState.activeUser = p; renderActiveUserTable();
 function renderActiveUserTable(){
   const start = (pageState.activeUser-1)*PAGE_SIZE;
   document.querySelector('#activeUserTable tbody').innerHTML = allActiveUsers.slice(start, start+PAGE_SIZE).map(r => `
-    <tr><td>${r.phone}</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
+    <tr><td>${r.phone}</td><td>${r.activity_rank}위</td><td>${r.events}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
   `).join('');
   renderPager('activeUserPager', allActiveUsers.length, 'activeUser', 'goActiveUserPage');
 }
