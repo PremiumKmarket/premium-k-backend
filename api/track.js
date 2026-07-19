@@ -1,4 +1,9 @@
 // api/track.js
+// Logs a single behavior event. Called from the frontend whenever a
+// visitor views a product, adds/removes from cart, searches, etc.
+// Works for guests too (deviceId only) so admin can see "what an
+// anonymous visitor was considering" before they ever register.
+
 const db = require('../lib/db');
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 
@@ -11,6 +16,7 @@ function setCors(res) {
 const ALLOWED_EVENTS = new Set([
   'view_product', 'add_to_cart', 'remove_from_cart', 'search',
   'submit_order', 'open_lightbox', 'switch_mode', 'category_browse',
+  'app_open',
 ]);
 
 module.exports = async (req, res) => {
