@@ -28,6 +28,8 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 .chart-bar-label{font-size:10px;color:#5B6272;margin-top:6px;white-space:nowrap;}
 .pill.dormant60{background:#FCE8E6;color:#9B2C1F;}
 .pill.dormant30{background:#FFF3E9;color:#8A4B00;}
+.pill.admin{background:#E6EEFC;color:#1D4ED8;}
+.pill.normal{background:#F0F1F3;color:#5B6272;}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(11,27,51,.45);z-index:500;align-items:center;justify-content:center;padding:16px;}
 .modal-overlay.open{display:flex;}
 .modal-box{background:#fff;border-radius:12px;padding:16px;max-width:420px;width:100%;max-height:75vh;overflow:auto;}
@@ -53,7 +55,7 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 
   <div class="card">
     <h2 style="font-size:14px;">회원 승인 관리</h2>
-    <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>담당영업사원</th><th>등급</th><th>상태</th><th>가입일</th><th>최종 방문일</th><th></th></tr></thead><tbody></tbody></table>
+    <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>담당영업사원</th><th>등급</th><th>관리자</th><th>상태</th><th>가입일</th><th>최종 방문일</th><th></th></tr></thead><tbody></tbody></table>
     <div class="pager" id="userPager"></div>
     <button onclick="exportUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
   </div>
@@ -118,7 +120,7 @@ const API_BASE = 'https://premium-k-backend.vercel.app/api';
 let token = localStorage.getItem('pk_token');
 
 // 고객이 직접 입력하는 값(이메일/상호명/주소/영업사원명/SKU 등)을 화면에 그대로 꽂아 넣으면
-  // 악성 스크립트가 실행될 수 있어(저장형 XSS), 화면에 표시하기 전에 반드시 이 함수로 이스케이프합니다.
+// 악성 스크립트가 실행될 수 있어(저장형 XSS), 화면에 표시하기 전에 반드시 이 함수로 이스케이프합니다.
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -196,6 +198,10 @@ function renderUserTable(){
       <td>${escapeHtml(u.phone)}</td><td>${escapeHtml(u.email)||'—'}</td><td>${escapeHtml(u.company_name)||'—'}</td><td>${escapeHtml(u.address)||'—'}</td>
       <td>${escapeHtml(u.rep_name)||'—'}</td>
       <td>${tierSelectHtml(u)}</td>
+      <td>
+        <span class="pill ${u.is_admin?'admin':'normal'}">${u.is_admin?'관리자':'일반'}</span>
+        <button onclick="toggleAdmin('${u.id}','${u.phone}',${!u.is_admin})" style="margin-left:4px;padding:2px 8px;font-size:11px;">${u.is_admin?'해제':'지정'}</button>
+      </td>
       <td><span class="pill ${u.approved?'approved':'pending'}">${u.approved?'승인됨':'대기중'}</span></td>
       <td>${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
       <td>${u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—'}</td>
@@ -215,6 +221,21 @@ async function loadUsers() {
   allUsers = data.users;
   pageState.user = 1;
   renderUserTable();
+}
+
+async function toggleAdmin(userId, phone, makeAdmin) {
+  const ok = confirm(
+    makeAdmin
+      ? `${phone} 고객을 관리자로 지정하시겠습니까?\n\n관리자가 되면 이 화면(admin.html) 전체에 접근할 수 있게 됩니다.`
+      : `${phone} 계정의 관리자 권한을 해제하시겠습니까?`
+  );
+  if (!ok) return;
+  try {
+    await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, isAdmin: makeAdmin }) });
+    loadUsers();
+  } catch (e) {
+    alert('관리자 권한 변경 실패: ' + e.message);
+  }
 }
 
 async function setApproved(userId, approved, tier) {
@@ -317,7 +338,7 @@ function formatDuration(seconds) {
   if (m < 60) return r ? `${m}분 ${r}초` : `${m}분`;
   const h = Math.floor(m / 60), rm = m % 60;
   return rm ? `${h}시간 ${rm}분` : `${h}시간`;
-}
+  }
 
 function goActiveUserPage(p){ pageState.activeUser = p; renderActiveUserTable(); }
 function renderActiveUserTable(){
@@ -338,7 +359,7 @@ function dormancyPill(lastSeen) {
 function renderDormantTable(){
   document.querySelector('#dormantTable tbody').innerHTML = allDormantCustomers.map(r => `
     <tr>
-    <td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.company_name)||'—'}</td>
+      <td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.company_name)||'—'}</td>
       <td>${new Date(r.joined_at).toLocaleDateString('ko-KR')}</td>
       <td>${r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '—'}</td>
       <td>${dormancyPill(r.last_seen)}</td>
@@ -383,8 +404,8 @@ function downloadCsv(filename, headers, rows) {
 }
 
 function exportUsersCsv() {
-  const headers = ['전화번호','이메일','상호명','주소','담당영업사원','등급','상태','가입일','최종 방문일'];
-  const rows = allUsers.map(u => [u.phone, u.email||'', u.company_name||'', u.address||'', u.rep_name||'', TIER_LABELS[u.tier||'tier3'], u.approved?'승인됨':'대기중', new Date(u.created_at).toLocaleDateString('ko-KR'), u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—']);
+  const headers = ['전화번호','이메일','상호명','주소','담당영업사원','등급','관리자여부','상태','가입일','최종 방문일'];
+  const rows = allUsers.map(u => [u.phone, u.email||'', u.company_name||'', u.address||'', u.rep_name||'', TIER_LABELS[u.tier||'tier3'], u.is_admin?'관리자':'일반', u.approved?'승인됨':'대기중', new Date(u.created_at).toLocaleDateString('ko-KR'), u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—']);
   downloadCsv('회원목록.csv', headers, rows);
 }
 
@@ -418,7 +439,7 @@ async function loadInsights() {
   if (data.events) {
     document.querySelector('#insightTable tbody').innerHTML = data.events.map(e => `
       <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.sku)||'—'}</td><td>${e.detail?escapeHtml(JSON.stringify(e.detail)):'—'}</td></tr>
-      `).join('');
+    `).join('');
   }
   if (data.topSkuViewers) {
     topSkuViewerMap = {};
@@ -482,3 +503,4 @@ if (token) {
 </script>
 </body>
 </html>
+  
