@@ -35,8 +35,13 @@ module.exports = async (req, res) => {
 
   if (req.method === 'GET') {
     const { rows } = await db.query(
-      `SELECT id, phone, email, company_name, address, rep_name, tier, approved, is_admin, created_at, approved_at
-       FROM users ORDER BY approved ASC, created_at DESC`
+      `SELECT u.id, u.phone, u.email, u.company_name, u.address, u.rep_name, u.tier, u.approved, u.is_admin, u.created_at, u.approved_at,
+              la.last_seen
+       FROM users u
+       LEFT JOIN (
+         SELECT phone, max(created_at) AS last_seen FROM behavior_events GROUP BY phone
+       ) la ON la.phone = u.phone
+       ORDER BY u.approved ASC, u.created_at DESC`
     );
     return res.json({ users: rows });
   }
