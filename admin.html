@@ -53,7 +53,7 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 
   <div class="card">
     <h2 style="font-size:14px;">회원 승인 관리</h2>
-    <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>담당영업사원</th><th>등급</th><th>상태</th><th>가입일</th><th></th></tr></thead><tbody></tbody></table>
+    <table id="userTable"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>담당영업사원</th><th>등급</th><th>상태</th><th>가입일</th><th>최종 방문일</th><th></th></tr></thead><tbody></tbody></table>
     <div class="pager" id="userPager"></div>
     <button onclick="exportUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
   </div>
@@ -198,6 +198,7 @@ function renderUserTable(){
       <td>${tierSelectHtml(u)}</td>
       <td><span class="pill ${u.approved?'approved':'pending'}">${u.approved?'승인됨':'대기중'}</span></td>
       <td>${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
+      <td>${u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—'}</td>
       <td style="white-space:nowrap;">
         ${u.approved
           ? `<button class="danger" onclick="setApproved('${u.id}',false)">승인취소</button>`
@@ -337,7 +338,7 @@ function dormancyPill(lastSeen) {
 function renderDormantTable(){
   document.querySelector('#dormantTable tbody').innerHTML = allDormantCustomers.map(r => `
     <tr>
-      <td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.company_name)||'—'}</td>
+    <td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.company_name)||'—'}</td>
       <td>${new Date(r.joined_at).toLocaleDateString('ko-KR')}</td>
       <td>${r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '—'}</td>
       <td>${dormancyPill(r.last_seen)}</td>
@@ -382,8 +383,8 @@ function downloadCsv(filename, headers, rows) {
 }
 
 function exportUsersCsv() {
-  const headers = ['전화번호','이메일','상호명','주소','담당영업사원','등급','상태','가입일'];
-  const rows = allUsers.map(u => [u.phone, u.email||'', u.company_name||'', u.address||'', u.rep_name||'', TIER_LABELS[u.tier||'tier3'], u.approved?'승인됨':'대기중', new Date(u.created_at).toLocaleDateString('ko-KR')]);
+  const headers = ['전화번호','이메일','상호명','주소','담당영업사원','등급','상태','가입일','최종 방문일'];
+  const rows = allUsers.map(u => [u.phone, u.email||'', u.company_name||'', u.address||'', u.rep_name||'', TIER_LABELS[u.tier||'tier3'], u.approved?'승인됨':'대기중', new Date(u.created_at).toLocaleDateString('ko-KR'), u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—']);
   downloadCsv('회원목록.csv', headers, rows);
 }
 
@@ -417,8 +418,8 @@ async function loadInsights() {
   if (data.events) {
     document.querySelector('#insightTable tbody').innerHTML = data.events.map(e => `
       <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.sku)||'—'}</td><td>${e.detail?escapeHtml(JSON.stringify(e.detail)):'—'}</td></tr>
-    `).join('');
-    }
+      `).join('');
+  }
   if (data.topSkuViewers) {
     topSkuViewerMap = {};
     data.topSkuViewers.forEach(v => {
