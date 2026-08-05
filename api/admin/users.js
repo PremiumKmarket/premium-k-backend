@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    const { userId, approved, newPassword, tier } = req.body;
+    const { userId, approved, newPassword, tier, isAdmin } = req.body;
 
     if (newPassword !== undefined) {
       if (!/^[0-9]{6}$/.test(newPassword)) {
@@ -62,6 +62,19 @@ module.exports = async (req, res) => {
       // 비밀번호가 바뀌면 기존 로그인 세션은 전부 무효화 (보안)
       await db.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
       return res.json({ user: rows[0], message: '비밀번호가 재설정되었습니다.' });
+    }
+
+    // 관리자 권한 부여/해제. 본인 권한은 실수로 해제해서 잠기는 걸 막기 위해 막아둡니다.
+    if (isAdmin !== undefined) {
+      if (userId === admin.id && isAdmin === false) {
+        return res.status(400).json({ error: 'CANNOT_DEMOTE_SELF', message: '본인의 관리자 권한은 스스로 해제할 수 없습니다.' });
+      }
+      const { rows } = await db.query(
+        'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, phone, is_admin',
+        [!!isAdmin, userId]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      return res.json({ user: rows[0] });
     }
 
     // 승인 상태는 그대로 두고 등급(tier)만 바꾸는 경우 (기존 고객 등급 변경)
