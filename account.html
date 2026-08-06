@@ -14,8 +14,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 .brand{background:linear-gradient(180deg,var(--navy),#132749);padding:16px 18px;position:sticky;top:0;z-index:10;}
 .brand .title{color:#fff;font-size:16px;font-weight:700;}
 .brand .sub{color:#B9C2D6;font-size:12px;margin-top:2px;}
-.brand .navrow{margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;}
-.brand .navrow a{color:#fff;font-size:12.5px;font-weight:700;text-decoration:underline;}
 .wrap{padding:14px 16px;max-width:640px;margin:0 auto;}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;}
 h2{font-size:14px;color:var(--navy);margin:0 0 12px;}
@@ -37,7 +35,6 @@ button.small{padding:6px 10px;font-size:11.5px;}
 .order-item pre{white-space:pre-wrap;font-size:11.5px;background:var(--bg);border-radius:8px;padding:8px;margin-top:8px;max-height:200px;overflow-y:auto;display:none;}
 a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer;}
 #loginGate{max-width:320px;margin:60px auto;text-align:center;}
-#loadError{display:none;max-width:420px;margin:40px auto;text-align:center;}
 </style>
 </head>
 <body>
@@ -45,9 +42,8 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
 <div class="brand">
   <div class="title">Premium K · 내 계정 My Account</div>
   <div class="sub" id="whoami"></div>
-  <div class="navrow">
-    <a href="#" onclick="goBackToShop();return false;">← Back to Shopping 상품 주문하러 가기</a>
-    <a href="#" onclick="jumpToOrders();return false;">📦 Order History 주문내역 확인</a>
+  <div style="margin-top:8px;">
+    <a href="#" onclick="goBackToShop();return false;" style="color:#fff;font-size:12.5px;font-weight:700;text-decoration:underline;">← Back to Shopping 상품 주문하러 가기</a>
   </div>
 </div>
 
@@ -65,13 +61,6 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
   </div>
 </div>
 
-<div id="loadError" class="card">
-  <div class="msg err" style="font-size:13px;">
-    Your session has expired. Please log in again.<br>세션이 만료되었습니다. 다시 로그인해주세요.
-  </div>
-  <button style="width:100%;margin-top:10px;" onclick="logout()">Login again 다시 로그인</button>
-</div>
-
 <div class="wrap" id="mainContent" style="display:none;">
 
   <div class="card">
@@ -80,7 +69,6 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
     <div class="field"><label>Email 이메일</label><input id="profEmail" disabled></div>
     <div class="field"><label>Company 상호명</label><input id="profCompany" disabled></div>
     <div class="field"><label>Status 상태</label><input id="profStatus" disabled></div>
-    <div class="field"><label>Member Since 가입일시</label><input id="profCreatedAt" disabled></div>
   </div>
 
   <div class="card">
@@ -103,7 +91,7 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
     <div id="addrMsg" class="msg"></div>
   </div>
 
-  <div class="card" id="ordersCard">
+  <div class="card">
     <h2>Order History 주문 내역</h2>
     <div id="orderList"></div>
   </div>
@@ -116,8 +104,11 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
 <script>
 const API_BASE = 'https://premium-k-backend.vercel.app/api';
 let token = localStorage.getItem('pk_token');
-let authUser = null;
-try { authUser = JSON.parse(localStorage.getItem('pk_user') || 'null'); } catch (e) { authUser = null; }
+// 참고: pk_user는 더 이상 화면 표시용으로 신뢰하지 않습니다 — 같은 기기를 여러
+// 계정이 함께 쓰면 이 캐시가 낡아있을 수 있기 때문입니다. 아래 loadProfile()이
+// 매번 서버에서 실제 토큰 소유자 정보를 다시 조회해서 화면에 표시하고,
+// 그 결과로 localStorage도 다시 최신화(자가 치유)합니다.
+  let authUser = JSON.parse(localStorage.getItem('pk_user') || 'null');
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
@@ -125,11 +116,7 @@ async function api(path, options = {}) {
   const res = await fetch(API_BASE + path, { ...options, headers });
   if (res.status === 204) return {};
   const data = await res.json().catch(()=>({}));
-  if (!res.ok) {
-    const err = new Error(data.message || data.error || 'Request failed');
-    err.status = res.status;
-    throw err;
-  }
+  if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
   return data;
 }
 
@@ -160,10 +147,9 @@ async function doLogin(){
   try {
     const data = await api('/auth/login', { method:'POST', body: JSON.stringify({ phone, password }) });
     token = data.token;
-    authUser = {
-      phone: phone.replace(/[^0-9]/g,''), approved: data.approved, email: data.email,
-      companyName: data.companyName, isAdmin: data.isAdmin, createdAt: data.createdAt,
-    };
+    // 로그인 즉시는 로그인 응답값으로 잠깐 채워두고, init()에서 바로
+    // 서버 재조회(loadProfile)로 덮어써서 항상 정확한 값이 되게 합니다.
+    authUser = { phone: phone.replace(/[^0-9]/g,''), approved: data.approved, email: data.email, companyName: data.companyName, isAdmin: data.isAdmin };
     localStorage.setItem('pk_token', token);
     localStorage.setItem('pk_user', JSON.stringify(authUser));
     init();
@@ -177,45 +163,34 @@ function goBackToShop(){
   if (history.length > 1) {
     history.back();
   } else {
-    alert('Please open the Site_Order file directly to shop.\n상품 주문 화면(Site_Order 파일)을 직접 열어주세요.');
+    alert('상품 주문 화면(Site_Order 파일)을 직접 열어주세요.\nPlease open the Site_Order file directly to shop.');
   }
-}
-
-function jumpToOrders(){
-  const el = document.getElementById('ordersCard');
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function logout(){
   localStorage.removeItem('pk_token');
   localStorage.removeItem('pk_user');
-  token = null; authUser = null;
-  document.getElementById('loadError').style.display = 'none';
-  document.getElementById('mainContent').style.display = 'none';
-  document.getElementById('loginGate').style.display = 'block';
-}
-
-function showSessionExpired(){
-  document.getElementById('mainContent').style.display = 'none';
-  document.getElementById('loginGate').style.display = 'none';
-  document.getElementById('loadError').style.display = 'block';
-  localStorage.removeItem('pk_token');
-  localStorage.removeItem('pk_user');
-}
-
-function formatDate(iso){
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) + ' ' + new Date(iso).toLocaleDateString('ko-KR'); }
-  catch (e) { return iso; }
+  // 이 기기에 남아있던 장바구니/주문자 정보도 같이 지워서, 다음에 이 기기로
+  // 다른 계정이 로그인했을 때 이전 계정 정보가 섞여 보이지 않게 합니다.
+  localStorage.removeItem('pk_cart');
+  localStorage.removeItem('pk_custinfo');
+  location.reload();
 }
 
 async function loadProfile(){
-  document.getElementById('profPhone').value = authUser.phone || '';
-  document.getElementById('profEmail').value = authUser.email || '—';
-  document.getElementById('profCompany').value = authUser.companyName || '—';
-  document.getElementById('profStatus').value = authUser.approved ? 'Approved 승인됨' : 'Pending approval 승인 대기중';
-  document.getElementById('profCreatedAt').value = formatDate(authUser.createdAt);
-  document.getElementById('whoami').textContent = `${authUser.phone}님 ${authUser.isAdmin ? '(Admin 관리자)' : ''}`;
+  // 화면에 보여줄 정보는 항상 서버에서 지금 이 토큰으로 새로 조회한 값을
+  // 씁니다(로컬 캐시 authUser는 쓰지 않음). 이렇게 해야 같은 기기를 여러
+  // 계정이 함께 써도 항상 실제 로그인된 계정의 정보만 표시됩니다.
+  const data = await api('/account?resource=profile');
+  document.getElementById('profPhone').value = data.phone || '';
+  document.getElementById('profEmail').value = data.email || '—';
+  document.getElementById('profCompany').value = data.companyName || '—';
+  document.getElementById('profStatus').value = data.approved ? 'Approved 승인됨' : 'Pending approval 승인 대기중';
+  document.getElementById('whoami').textContent = `${data.phone}님 ${data.isAdmin ? '(Admin 관리자)' : ''}`;
+
+  // 서버에서 받은 최신 값으로 로컬 캐시도 갱신 (자가 치유)
+  authUser = { phone: data.phone, approved: data.approved, email: data.email, companyName: data.companyName, isAdmin: data.isAdmin, tier: data.tier };
+  localStorage.setItem('pk_user', JSON.stringify(authUser));
 }
 
 async function changePassword(){
@@ -283,8 +258,7 @@ async function deleteAddress(id){
   await api('/account?resource=addresses', { method:'DELETE', body: JSON.stringify({ id }) });
   loadAddresses();
 }
-
-async function loadOrders(){
+  async function loadOrders(){
   const data = await api('/orders');
   const el = document.getElementById('orderList');
   if (!data.orders.length) { el.innerHTML = '<div style="font-size:12.5px;color:var(--text-2);">No orders yet. 아직 주문 내역이 없습니다.</div>'; return; }
@@ -308,26 +282,28 @@ function toggleOrderDetail(idx){
 }
 
 async function init(){
-  document.getElementById('loadError').style.display = 'none';
-
-  if (!token || !authUser) {
+  if (!token) {
     document.getElementById('loginGate').style.display = 'block';
     document.getElementById('mainContent').style.display = 'none';
     return;
   }
-
+  try {
+    // 여기서 바로 서버에 물어봐서, 토큰이 실제로 유효한지 + 진짜 소유자가
+    // 누구인지 확인합니다. 토큰이 만료/무효면 여기서 걸러지고 로그인 화면으로.
+    await loadProfile();
+  } catch (e) {
+    // 토큰이 유효하지 않으면 로컬 캐시를 전부 지우고 로그인 화면으로 보냅니다.
+    localStorage.removeItem('pk_token');
+    localStorage.removeItem('pk_user');
+    token = null; authUser = null;
+    document.getElementById('loginGate').style.display = 'block';
+    document.getElementById('mainContent').style.display = 'none';
+    return;
+  }
   document.getElementById('loginGate').style.display = 'none';
   document.getElementById('mainContent').style.display = 'block';
-  loadProfile();
-
-  try {
-    await Promise.all([loadAddresses(), loadOrders()]);
-  } catch (e) {
-    console.error(e);
-    if (e.status === 401) {
-      showSessionExpired();
-    }
-  }
+  loadAddresses().catch(e => console.error(e));
+  loadOrders().catch(e => console.error(e));
 }
 
 init();
