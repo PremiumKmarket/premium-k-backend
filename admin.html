@@ -48,7 +48,7 @@ input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:14px;widt
 </div>
 
 <div id="dashboard" style="display:none;">
-  <h1>Premium K 관리자</h1>
+  <h1>Premium K 관리자 <button class="danger" style="float:right;font-size:11px;padding:5px 10px;" onclick="adminLogout()">로그아웃</button></h1>
   <div class="card">
     <a href="catalog.html" style="text-decoration:none;"><button>Manage Products 상품 관리 (가격/사진/추가) →</button></a>
   </div>
@@ -127,8 +127,7 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  .replace(/'/g, '&#39;');
 }
 
 async function api(path, options = {}) {
@@ -152,10 +151,36 @@ async function adminLogin() {
     document.getElementById('dashboard').style.display = 'block';
     loadUsers();
     loadInsights();
+    resetInactivityTimer();
   } catch (e) {
     document.getElementById('loginErr').textContent = e.message;
   }
 }
+
+function adminLogout() {
+  token = null;
+  localStorage.removeItem('pk_token');
+  document.getElementById('loginBox').style.display = 'block';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('phone').value = '';
+  document.getElementById('password').value = '';
+}
+
+// ===== 3분간 조작이 없으면 자동 로그아웃 =====
+const INACTIVITY_LIMIT_MS = 3 * 60 * 1000;
+let inactivityTimer = null;
+function resetInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  if (!token) return;
+  inactivityTimer = setTimeout(() => {
+    if (!token) return;
+    adminLogout();
+    alert('3분간 조작이 없어 자동으로 로그아웃되었습니다.');
+  }, INACTIVITY_LIMIT_MS);
+}
+['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(evt =>
+  document.addEventListener(evt, resetInactivityTimer, { passive: true })
+);
 
 const PAGE_SIZE = 10;
 const pageState = { user: 1, topSku: 1, activeUser: 1 };
@@ -172,8 +197,7 @@ function renderPager(pagerId, dataLen, key, onChangeFn) {
     <button ${cur>=totalPages?'disabled':''} onclick="${onChangeFn}(${cur+1})">다음 ›</button>
   `;
 }
-
-function goUserPage(p){ pageState.user = p; renderUserTable(); }
+  function goUserPage(p){ pageState.user = p; renderUserTable(); }
 
 const TIER_LABELS = { tier1: 'Platinum 플래티늄', tier2: 'Gold 골드', tier3: 'Silver 실버' };
 
@@ -338,7 +362,7 @@ function formatDuration(seconds) {
   if (m < 60) return r ? `${m}분 ${r}초` : `${m}분`;
   const h = Math.floor(m / 60), rm = m % 60;
   return rm ? `${h}시간 ${rm}분` : `${h}시간`;
-  }
+}
 
 function goActiveUserPage(p){ pageState.activeUser = p; renderActiveUserTable(); }
 function renderActiveUserTable(){
@@ -392,7 +416,7 @@ function downloadCsv(filename, headers, rows) {
   const esc = v => {
     const s = (v === null || v === undefined) ? '' : String(v);
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
+    };
   const lines = [headers.map(esc).join(',')].concat(rows.map(r => r.map(esc).join(',')));
   const csv = '\uFEFF' + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -499,8 +523,8 @@ if (token) {
   document.getElementById('dashboard').style.display = 'block';
   loadUsers().catch(()=>{ localStorage.removeItem('pk_token'); location.reload(); });
   loadInsights();
+  resetInactivityTimer();
 }
 </script>
 </body>
 </html>
-  
