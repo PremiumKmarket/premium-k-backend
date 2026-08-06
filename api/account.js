@@ -3,6 +3,10 @@
 // + account/addresses.js) into one, to stay under Vercel's 12-function cap
 // on the Hobby plan. Routed by a `resource` query param.
 //
+//   GET    /api/account?resource=profile   — always re-fetched from the DB
+//          using the bearer token, never trusts client-cached data. Used by
+//          account.html so a stale/incorrect localStorage cache on a shared
+//          device can never show the wrong customer's info.
 //   POST   /api/account?resource=password  { currentPassword, newPassword }
 //   GET    /api/account?resource=addresses
 //   POST   /api/account?resource=addresses { label, address, isDefault }
@@ -22,6 +26,23 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+async function handleProfile(req, res, user) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  // user는 이 요청의 Authorization 헤더(토큰)로 DB에서 방금 새로 조회한 값입니다.
+  // 브라우저에 저장돼있던 예전 캐시는 절대 참고하지 않으므로, 같은 기기를
+  // 여러 계정이 공유해도 항상 지금 로그인된 계정의 진짜 정보만 돌려줍니다.
+  return res.json({
+    phone: user.phone,
+    email: user.email,
+    companyName: user.company_name,
+    tier: user.tier,
+    approved: user.approved,
+    isAdmin: user.is_admin,
+    createdAt: user.created_at,
+    repName: user.rep_name,
+  });
 }
 
 async function handlePassword(req, res, user) {
@@ -125,6 +146,7 @@ module.exports = async (req, res) => {
 
   try {
     const resource = req.query.resource;
+    if (resource === 'profile') return await handleProfile(req, res, user);
     if (resource === 'password') return await handlePassword(req, res, user);
     if (resource === 'addresses') return await handleAddresses(req, res, user);
     if (resource === 'tier-upgrade') return await handleTierUpgradeRequest(req, res, user);
