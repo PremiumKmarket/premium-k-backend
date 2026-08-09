@@ -1,9 +1,11 @@
 // api/admin/insights.js
 // GET /api/admin/insights?phone=... -> recent behavior events for one customer
 // GET /api/admin/insights -> most-viewed / most-added products across everyone (last 30 days)
+// GET /api/admin/insights?export=prices -> full catalog with Platinum/Gold/Silver pricing (CSV export)
 
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
+const { applyTierPricing } = require('../../lib/pricing');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -18,6 +20,44 @@ module.exports = async (req, res) => {
   const token = getBearerToken(req);
   const admin = await getUserFromToken(token);
   if (!admin || !admin.is_admin) return res.status(403).json({ error: 'FORBIDDEN' });
+
+  // 관리자 화면의 "상품 가격 CSV 내보내기" 버튼용 — 전체 도매가(Platinum/Gold/Silver
+  // 등급별)를 한 번에 내려줍니다. 다른 조회들과 달리 최근 30일 등 기간 제한 없이
+  // 카탈로그 전체를 그대로 반환합니다.
+  if (req.query.export === 'prices') {
+    const { rows } = await db.query('SELECT * FROM products ORDER BY cat, sort_order, name_ko');
+    const products = rows.map((r) => {
+      const base = {
+        cat: r.cat,
+        nameKo: r.name_ko,
+        nameEn: r.name_en,
+        sku: r.sku,
+        price: r.price !== null ? Number(r.price) : null,
+        ctnPrice: r.ctn_price !== null ? Number(r.ctn_price) : null,
+        ctnQty: r.ctn_qty || null,
+        spec: r.spec || null,
+        tbd: r.tbd,
+      };
+      const gold = applyTierPricing(base, 'tier2');
+      const silver = applyTierPricing(base, 'tier3');
+      return {
+        cat: base.cat,
+        nameKo: base.nameKo,
+        nameEn: base.nameEn,
+        sku: base.sku,
+        spec: base.spec,
+        ctnQty: base.ctnQty,
+        tbd: base.tbd,
+        platinumUnitPrice: base.price,
+        platinumCtnPrice: base.ctnPrice,
+        goldUnitPrice: gold.price,
+        goldCtnPrice: gold.ctnPrice,
+        silverUnitPrice: silver.price,
+        silverCtnPrice: silver.ctnPrice,
+      };
+    });
+    return res.json({ products });
+  }
 
   const { phone } = req.query;
 
@@ -39,6 +79,7 @@ module.exports = async (req, res) => {
     ORDER BY n DESC
     LIMIT 50
   `);
+
   // ===== 정확한 "방문(세션)" 재구성 =====
   // 기존에는 이벤트 건수를 그냥 셌는데, 그러면 한 번 들어와서 상품을 10개 본 사람과
   // 10번 따로 들어와서 1개씩 본 사람이 똑같이 "10"으로 보이는 문제가 있었습니다.
