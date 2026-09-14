@@ -9,6 +9,7 @@
 
 const db = require('../lib/db');
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
+const { syncOrderToErp } = require('../lib/erpSync');
 const { applyTierPricing, DEFAULT_TIER } = require('../lib/pricing');
 
 function setCors(res) {
@@ -150,6 +151,30 @@ module.exports = async (req, res) => {
       return res.status(200).json({ invoiceNumber });
     }
 
+    // ⚠️ 2026-09-12 — ERP 수동 재시도. 주문 자체는 이미 저장돼 있고 ERP 전달만
+    // 실패(erp_sync_status=FAILED)한 경우, 같은 order.id로 다시 전달합니다. ERP가
+    // (source_system, source_order_id) 멱등성을 보장하므로 중복 생성되지 않습니다.
+    // 본인 주문 또는 관리자만 가능. 브라우저가 보내는 값은 orderId 하나뿐이며 내용은
+    // 전부 서버 DB의 canonical 주문에서 다시 읽습니다.
+    // ⚠️ 2026-09-12 (보안 검토 요청 반영) — 관리자가 실제로 admin 계정으로 로그인해서
+    // 호출했는지는 위 getUserFromToken(세션 검증)으로 이미 보장됨(정적 admin 토큰 방식 아님).
+    // 여기에 추가로: (1) 최소 rate limit(같은 주문 10초 내 중복 재시도 차단 — 실수로 버튼을
+    // 연타하거나 자동화된 남용을 막기 위함), (2) audit log(누가 언제 어느 주문을 재시도했는지
+    // behavior_events에 기록, 기존 테이블 재사용이라 스키마 변경 없음)를 추가함
+    if (req.query.action === 'retry-erp') {
+      const orderId = Number(req.body?.orderId);
+      if (!orderId) return res.status(400).json({ error: 'orderId가 필요합니다.' });
+      const { rows: own } = await db.query(`SELECT user_id, erp_sync_status, erp_last_attempt_at FROM orders WHERE id = $1`, [orderId]);
+      if (!own[0]) return res.status(404).json({ error: 'ORDER_NOT_FOUND' });
+      if (own[0].user_id !== user.id && !user.is_admin) return res.status(403).json({ error: 'FORBIDDEN' });
+      if (own[0].erp_last_attempt_at && (Date.now() - new Date(own[0].erp_last_attempt_at).getTime()) < 10000) {
+        return res.status(429).json({ error: 'TOO_MANY_REQUESTS', message: '방금 전에 재시도했습니다. 잠시 후 다시 시도해주세요.' });
+      }
+      await db.query(`INSERT INTO behavior_events (user_id, device_id, event_type) VALUES ($1,$2,'erp_retry')`, [user.id, `order_id=${orderId}`]);
+      const result = await syncOrderToErp(orderId);
+      return res.status(200).json({ orderId, erp: result });
+    }
+
     const {
       customerName, address, repName,
       deliveryMethod, paymentMethod, items: rawItems, invoiceNumber,
@@ -178,7 +203,12 @@ module.exports = async (req, res) => {
       ]
     );
 
-    return res.status(201).json({ order: rows[0] });
+    // ⚠️ 2026-09-12 — 주문이 DB에 저장된 뒤 ERP로 Server-to-Server 전달. 이 서버가
+    // 세션에서 확인한 user.id와 방금 저장한 canonical 주문(재계산된 가격 포함)만
+    // 전달합니다. 전달 실패는 고객 주문 실패가 아닙니다 — 상태만 FAILED로 기록하고
+    // 주문은 정상 응답(201)합니다. 나중에 action=retry-erp로 같은 order.id 재시도 가능.
+    const erp = await syncOrderToErp(rows[0].id);
+    return res.status(201).json({ order: rows[0], erpSync: erp.status });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'SERVER_ERROR' });
