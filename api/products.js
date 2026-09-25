@@ -51,7 +51,8 @@ module.exports = async (req, res) => {
     }
 
     const [{ rows: productRows }, { rows: imgRows }] = await Promise.all([
-      db.query('SELECT * FROM products ORDER BY cat, sort_order, name_ko'),
+      // v1.0 ERP 연동 — ERP에서 노출 해제·판매중지된 상품(hidden)은 고객 화면에 내보내지 않는다
+      db.query('SELECT * FROM products WHERE hidden = FALSE ORDER BY cat, sort_order, name_ko'),
       db.query('SELECT page_number, img FROM togo_page_images'),
     ]);
 
