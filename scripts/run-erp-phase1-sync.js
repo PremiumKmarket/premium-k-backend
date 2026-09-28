@@ -1,4 +1,4 @@
-// scripts/run-erp-phase1-sync.js  v1.1 — ERP → Site Order 1차 동기화(박스가·입수) 1회 실행기
+// scripts/run-erp-phase1-sync.js  v1.2  (공통 안전 검사 결과 출력) — ERP → Site Order 1차 동기화(박스가·입수) 1회 실행기
 //
 // 기본은 확인만 한다(DB를 바꾸지 않음). 실제 반영은 --apply 와 --expect=숫자 를 함께 줘야만 한다.
 //   node scripts/run-erp-phase1-sync.js                    → 확인만 (바뀔 목록 출력)
@@ -45,6 +45,9 @@ const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       console.log(`  ${u.sku.padEnd(16)} ${cp.padEnd(24)} ${cq}`);
     }
 
+    const rv = plan.reviews || [];
+    console.log(`\n안전 검사로 자동 반영 제외: ${rv.length}개 ${JSON.stringify(plan.counts.review)}`);
+    for (const r of rv) console.log(`  ${r.sku.padEnd(16)} [${r.code}] ${r.reason}`);
     if (!APPLY) {
       console.log('\n※ 확인만 했습니다. DB는 바뀌지 않았습니다.');
       console.log(`   실제 반영하려면: node scripts/run-erp-phase1-sync.js --apply --expect=${plan.updates.length}`);

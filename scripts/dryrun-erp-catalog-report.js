@@ -1,4 +1,4 @@
-// scripts/dryrun-erp-catalog-report.js  v1.3 — DRY RUN 전용 (읽기만 함)
+// scripts/dryrun-erp-catalog-report.js  v1.4 — DRY RUN 전용 (읽기만 함)
 //
 // ★ DB를 절대 바꾸지 않는다. Site Order DB에는 SELECT 한 건, ERP에는 조회(GET) 한 건뿐이다.
 //   INSERT / UPDATE / DELETE / ALTER / CREATE / DROP / TRUNCATE 없음. 결과는 CSV 파일로만 쓴다.
@@ -10,6 +10,8 @@
 //  C. report-C-other.csv         갱신·신규 어디에도 들지 않은 ERP 상품의 정체
 //  P1. report-P1-price-qty.csv   1차 동기화(가격·입수)에서 실제로 바뀔 값 — 실제 동기화와 같은 함수(planPhase1)로 계산
 //  P15. report-P15-name-ko.csv   한글명 1.5차 제안 (사이트 한글명 칸이 영어, ERP에는 한글이 있는 상품)
+//  P1R. report-P1-review.csv     1차 공통 안전 검사로 자동 반영 제외된 상품
+//  P2.  report-P2-buckets.csv    2차(낱개가) 8개 분류 — 실제 2차 실행기와 같은 계산
 //
 // 실행:
 //   set "POSTGRES_URL=..."  set "TRONIC_ERP_BASE_URL=..."  set "PREMIUM_K_SERVER_SECRET=..."
@@ -17,6 +19,7 @@
 const fs = require('fs');
 const db = require('./../lib/db');
 const { planPhase1 } = require('./../lib/erpCatalogPhase1');   // 실제 1차 동기화와 같은 판단 로직
+const { planPrice, BUCKETS } = require('./../lib/erpCatalogPrice');   // 실제 2차 동기화와 같은 판단 로직
 
 const ERP_BASE = process.env.TRONIC_ERP_BASE_URL;
 const SECRET = process.env.PREMIUM_K_SERVER_SECRET;
@@ -234,6 +237,12 @@ function tokens(...names) {
     writeCsv('report-P1-price-qty.csv', ['SKU', '상품명', '현재 박스가', 'ERP 박스가', '최종 박스가', '현재 낱개가', 'ERP 낱개가',
       '최종 낱개가', '현재 입수', 'ERP 입수', '최종 입수', '참고', 'action', '설명'], p1Rows);
 
+    writeCsv('report-P1-review.csv', ['SKU', '상품명', '검사', '비율', '이유', '현재 박스가', '현재 입수', '현재 낱개가', '반영하려던 값'],
+      (plan.reviews || []).map((r) => [r.sku, r.name, r.code, r.ratio ?? '', r.reason, r.current.ctn_price, r.current.ctn_qty, r.current.price, JSON.stringify(r.wanted)]));
+    const plan2 = planPrice(erpAll, site);
+    writeCsv('report-P2-buckets.csv', ['bucket', 'SKU', '상품명', '현재 Site price', 'ERP piecePrice', 'ctnPrice', 'ctnQty', 'ratio', 'reason'],
+      plan2.rows.map((r) => [r.bucket, r.sku, r.name, r.cur, r.erp, r.ctnPrice, r.ctnQty, r.ratio, r.reason]));
+
     // ── P15. 한글명 1.5차 제안 (DB에 쓰지 않음) ──
     // 넓은 규칙으로 자동 삭제하지 않는다. 이름 "맨 끝"이 정확히 " 1CTN(CASE)=숫자P" 인 경우에만 그 부분을 뗀 제안을 만들고,
     // 그 외에는 ERP 원문을 그대로 제안하고 "사람 확인"으로 표시한다.
@@ -312,12 +321,23 @@ function tokens(...names) {
     console.log(`  건드리지 않음: TOGO ${pc.togoSkipped} / 사이트 전용 ${pc.siteOnlySkipped}`);
     if (pc.tbdGetsPrice) console.log(`  참고: "가격 문의"로 표시 중인데 가격이 들어가는 상품 ${pc.tbdGetsPrice}개 (표시 상태는 1차에서 바꾸지 않음)`);
 
+    console.log(`  공통 안전 검사로 자동 반영 제외: ${(plan.reviews || []).length}개 ${JSON.stringify(pc.review)}  → report-P1-review.csv`);
+
+    const c2 = plan2.counts;
+    console.log('\n[P2] 2차 동기화 (낱개가) — 실제 2차 실행기와 같은 계산');
+    if (!plan2.erpSendsPiece) console.log('  ※ ERP 구버전(piecePrice 없음) → 모두 SKIP_NO_PIECE_PRICE');
+    line('검사 대상 (SKU 일치·비TOGO)', c2.target);
+    for (const b of BUCKETS) line('  ' + b, c2.bucket[b]);
+    line('  합계 확인', c2.bucketSumOk ? '검사 대상과 일치 ✅' : '불일치 ⚠');
+
     console.log('\n[P15] 한글명 1.5차 제안 (DB에 쓰지 않음)');
     line('대상 (사이트 칸 영어 + ERP 한글)', p15Rows.length);
     line('끝의 포장표기만 뗀 제안', p15Clean);
     line('ERP 원문 그대로 (사람 확인)', p15Manual);
 
-    console.log('\n파일 5개를 만들었습니다 (엑셀로 열어보세요):');
+    console.log('\n파일 7개를 만들었습니다 (엑셀로 열어보세요):');
+    console.log(`  report-P1-review.csv       (${(plan.reviews || []).length}줄)  ← 1차 안전 검사 제외`);
+    console.log(`  report-P2-buckets.csv      (${plan2.rows.length}줄)  ← 2차 낱개가 8개 분류`);
     console.log(`  report-P1-price-qty.csv    (${p1Rows.length}줄)  ← 1차 동기화 최종 확인용`);
     console.log(`  report-P15-name-ko.csv     (${p15Rows.length}줄)  ← 한글명 제안`);
     console.log(`  report-A-field-diff.csv    (${aRows.length}줄)`);
