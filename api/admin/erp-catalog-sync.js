@@ -1,7 +1,8 @@
-// api/admin/erp-catalog-sync.js
-// v1.0 — 관리자가 ERP 상품·가격을 지금 바로 받아오거나, 마지막 연동 상태를 확인한다.
+// api/admin/erp-catalog-sync.js  v1.1
+// 관리자가 마지막 연동 상태를 확인하거나, 1차 동기화(박스가·입수만)를 실행한다.
 //   GET  : 마지막 연동 시각·결과 조회
-//   POST : 지금 받아오기 ( body { full: true } 면 전체 다시 받기 )
+//   POST : 1차 동기화 실행 — ERP_CATALOG_SYNC_MODE=phase1 설정이 있을 때만 (없으면 423)
+//          body { force: true } 면 지문이 같아도 다시 계산
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 const { syncCatalogFromErp, readState } = require('../../lib/erpCatalog');
@@ -32,7 +33,11 @@ module.exports = async (req, res) => {
       return res.json({ state, products: rows[0] });
     }
     if (req.method === 'POST') {
-      const result = await syncCatalogFromErp({ full: req.body?.full === true });
+      // 이중 잠금 — 운영에서 1차 정책을 켜기 전에는 관리자 창구로도 실행되지 않는다
+      if (process.env.ERP_CATALOG_SYNC_MODE !== 'phase1') {
+        return res.status(423).json({ ok: false, error: '동기화가 잠겨 있습니다 (ERP_CATALOG_SYNC_MODE 미설정).' });
+      }
+      const result = await syncCatalogFromErp({ force: req.body?.force === true });
       return res.json({ ok: true, ...result });
     }
     return res.status(405).json({ error: 'Method not allowed' });
