@@ -10,10 +10,13 @@
 //        -> { action:'erpStaffSync', expected, includeDeactivate } — ERP 직원 명단 반영
 // GET ?action=erpStaffPreview — ERP 직원 명단과 맞춰 본 미리보기 (변경 없음)
 // DELETE -> { userId } — permanently delete a user account
+//
+// v2.5 — ERP "Site Order 관리" 메뉴에서도 같은 API를 쓴다 (lib/adminAuth.js: 서버 간 비밀키 + ERP 사용자 역할).
+// ERP 역할: 보기 = C-Level·Director·Sales·Accountant / 바꾸기 = C-Level·Director / 관리자 지정 = C-Level
 
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
-const { getUserFromToken, getBearerToken } = require('../../lib/auth');
+const { resolveAdmin } = require('../../lib/adminAuth');
 const { sendSms, toE164US } = require('../../lib/sms');
 const { normalizeTier, DEFAULT_TIER } = require('../../lib/pricing');
 const { fetchRoster, computePlan, loadUsersForPlan, normPhone, savePhoneToErp } = require('../../lib/erpStaff');
@@ -24,19 +27,41 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-async function requireAdmin(req) {
-  const token = getBearerToken(req);
-  const user = await getUserFromToken(token);
-  if (!user || !user.is_admin) return null;
-  return user;
-}
+const NO_MANAGE = { error: 'FORBIDDEN_ROLE', message: '회원 승인·등급·직원 변경은 C-Level·Director만 할 수 있습니다.' };
 
 module.exports = async (req, res) => {
+  try {
+    return await handler(req, res);
+  } catch (e) {
+    console.error('[admin/users]', e.message);
+    if (!res.headersSent) return res.status(500).json({ error: 'SERVER_ERROR', message: '처리 중 오류가 발생했습니다.' });
+  }
+};
+
+async function handler(req, res) {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const admin = await requireAdmin(req);
+  const admin = await resolveAdmin(req);
   if (!admin) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근할 수 있습니다.' });
+  // 바꾸는 요청(POST·DELETE)과 ERP 직원 명단(이름·번호)은 C-Level·Director(또는 Site Order 관리자)만
+  if ((req.method === 'POST' || req.method === 'DELETE' || req.query.action === 'erpStaffPreview') && !admin.canManage) {
+    return res.status(403).json(NO_MANAGE);
+  }
+  // Site Order 관리자 계정(is_admin)은 관리자 지정 권한이 있는 사람(Site Order 관리자·ERP C-Level)만 바꿀 수 있다.
+  // (Director가 관리자 비밀번호를 바꿔 그 계정으로 로그인하는 식의 권한 상승을 막음)
+  if ((req.method === 'POST' || req.method === 'DELETE') && !admin.canGrantAdmin && req.body && req.body.userId !== undefined && req.body.userId !== null) {
+    const { rows: t } = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.body.userId]);
+    if (t[0] && t[0].is_admin) {
+      return res.status(403).json({ error: 'FORBIDDEN_ADMIN_TARGET', message: 'Site Order 관리자 계정은 C-Level만 바꿀 수 있습니다.' });
+    }
+  }
+  if (admin.via === 'erp' && req.method !== 'GET') {
+    const b = req.body || {};
+    const what = b.action || (b.newPassword !== undefined ? 'newPassword' : b.isAdmin !== undefined ? 'isAdmin' : b.makeStaff !== undefined ? 'makeStaff'
+      : b.approved !== undefined ? 'approved' : b.tier !== undefined ? 'tier' : req.method);
+    console.log('[erp-admin]', JSON.stringify({ erpUserId: admin.erpUserId, erpRole: admin.erpRole, what, userId: b.userId || null }));
+  }
 
   // ERP 직원 명단 미리보기 (아무것도 바꾸지 않음)
   if (req.method === 'GET' && req.query.action === 'erpStaffPreview') {
@@ -256,7 +281,8 @@ module.exports = async (req, res) => {
 
     // 관리자 권한 부여/해제. 본인 권한은 실수로 해제해서 잠기는 걸 막기 위해 막아둡니다.
     if (isAdmin !== undefined) {
-      if (userId === admin.id && isAdmin === false) {
+      if (!admin.canGrantAdmin) return res.status(403).json({ error: 'FORBIDDEN_ROLE', message: 'Site Order 관리자 지정·해제는 C-Level만 할 수 있습니다.' });
+      if (admin.id && String(userId) === String(admin.id) && isAdmin === false) {
         return res.status(400).json({ error: 'CANNOT_DEMOTE_SELF', message: '본인의 관리자 권한은 스스로 해제할 수 없습니다.' });
       }
       const { rows } = await db.query(
@@ -307,7 +333,7 @@ module.exports = async (req, res) => {
   if (req.method === 'DELETE') {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'MISSING_ID' });
-    if (userId === admin.id) {
+    if (admin.id && String(userId) === String(admin.id)) {
       return res.status(400).json({ error: 'CANNOT_DELETE_SELF', message: '본인 계정은 삭제할 수 없습니다.' });
     }
     const { rows } = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
@@ -316,4 +342,4 @@ module.exports = async (req, res) => {
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}

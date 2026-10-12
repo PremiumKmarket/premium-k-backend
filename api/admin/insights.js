@@ -2,9 +2,11 @@
 // GET /api/admin/insights?phone=... -> recent behavior events for one customer
 // GET /api/admin/insights -> most-viewed / most-added products across everyone (last 30 days)
 // GET /api/admin/insights?export=prices -> full catalog with Platinum/Gold/Silver pricing (CSV export)
+// v2.5 — ERP "Site Order 관리" 메뉴에서도 조회 (lib/adminAuth.js). 조회 전용이라 ERP의
+// C-Level·Director·Sales·Accountant 모두 볼 수 있다 (영업사원은 모든 거래처 실적 조회 — 회사 결정).
 
 const db = require('../../lib/db');
-const { getUserFromToken, getBearerToken } = require('../../lib/auth');
+const { resolveAdmin } = require('../../lib/adminAuth');
 const { applyTierPricing } = require('../../lib/pricing');
 
 function setCors(res) {
@@ -17,9 +19,8 @@ module.exports = async (req, res) => {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const token = getBearerToken(req);
-  const admin = await getUserFromToken(token);
-  if (!admin || !admin.is_admin) return res.status(403).json({ error: 'FORBIDDEN' });
+  const admin = await resolveAdmin(req);
+  if (!admin) return res.status(403).json({ error: 'FORBIDDEN' });
 
   // 관리자 화면의 "상품 가격 CSV 내보내기" 버튼용 — 전체 도매가(Platinum/Gold/Silver
   // 등급별)를 한 번에 내려줍니다. 다른 조회들과 달리 최근 30일 등 기간 제한 없이
