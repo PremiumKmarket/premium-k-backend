@@ -7,6 +7,8 @@
 //           number; the admin resets it here and tells the customer)
 //        -> { action:'createStaff', name, phone } — 직원 계정 새로 만들기
 //        -> { userId, makeStaff: true|false } — 기존 계정 직원 지정/해제
+//        -> { action:'erpStaffSync', expected, includeDeactivate } — ERP 직원 명단 반영
+// GET ?action=erpStaffPreview — ERP 직원 명단과 맞춰 본 미리보기 (변경 없음)
 // DELETE -> { userId } — permanently delete a user account
 
 const bcrypt = require('bcryptjs');
@@ -14,6 +16,7 @@ const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 const { sendSms, toE164US } = require('../../lib/sms');
 const { normalizeTier, DEFAULT_TIER } = require('../../lib/pricing');
+const { fetchRoster, computePlan, loadUsersForPlan } = require('../../lib/erpStaff');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -35,6 +38,17 @@ module.exports = async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근할 수 있습니다.' });
 
+  // ERP 직원 명단 미리보기 (아무것도 바꾸지 않음)
+  if (req.method === 'GET' && req.query.action === 'erpStaffPreview') {
+    try {
+      const roster = await fetchRoster();
+      const result = computePlan(roster.staff, await loadUsersForPlan(db.query));
+      return res.json({ ...result, rosterCount: roster.staff.length });
+    } catch (e) {
+      return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message });
+    }
+  }
+
   if (req.method === 'GET') {
     const { rows } = await db.query(
       `SELECT u.id, u.phone, u.email, u.company_name, u.address, u.rep_name, u.tier, u.approved, u.is_admin, u.created_at, u.approved_at,
@@ -51,6 +65,73 @@ module.exports = async (req, res) => {
 
   if (req.method === 'POST') {
     const { userId, approved, newPassword, tier, isAdmin, action, makeStaff } = req.body;
+
+    // ERP 직원 명단 반영. 미리보기에서 본 건수(expected)와 지금 다시 계산한 건수가 하나라도 다르면
+    // 아무것도 바꾸지 않고 멈춤 (그 사이 ERP나 회원 정보가 바뀐 경우). 한 트랜잭션으로 전부 반영 또는 전부 취소.
+    if (action === 'erpStaffSync') {
+      const expected = req.body.expected || {};
+      const includeDeactivate = !!req.body.includeDeactivate;
+      let roster;
+      try { roster = await fetchRoster(); }
+      catch (e) { return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message }); }
+      if (!roster.staff.length) return res.status(409).json({ error: 'EMPTY_ROSTER', message: 'ERP 재직 직원 명단이 비어 있어 반영하지 않았습니다.' });
+      const client = await db.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
+        const { plan, deactivate, counts } = computePlan(roster.staff, await loadUsersForPlan((t, p) => client.query(t, p)));
+        const want = { CREATE: counts.CREATE || 0, CONVERT: counts.CONVERT || 0, LINK: counts.LINK || 0, DEACTIVATE: includeDeactivate ? (counts.DEACTIVATE || 0) : 0 };
+        for (const k of Object.keys(want)) {
+          if (Number(expected[k] || 0) !== want[k]) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: 'PLAN_CHANGED', message: '미리보기 이후 ERP나 회원 정보가 바뀌었습니다. 다시 불러온 뒤 반영해주세요.', counts });
+          }
+        }
+        const hash000000 = await bcrypt.hash('000000', 10);
+        const done = { CREATE: 0, CONVERT: 0, LINK: 0, DEACTIVATE: 0 };
+        for (const r of plan) {
+          if (r.action === 'CREATE') {
+            await client.query(
+              `INSERT INTO users (phone, password_hash, company_name, rep_name, approved, approved_at, tier, is_staff, must_change_password, erp_staff_id)
+               VALUES ($1, $2, $3, $4, TRUE, now(), 'tier1', TRUE, TRUE, $5)`,
+              [r.phone, hash000000, 'Premium K Staff · ' + r.name, r.name, r.erpStaffId]);
+            done.CREATE++;
+          } else if (r.action === 'CONVERT') {
+            const u = await client.query(
+              `UPDATE users SET is_staff = TRUE, erp_staff_id = $2, tier = 'tier1', approved = TRUE, approved_at = COALESCE(approved_at, now()),
+                      company_name = COALESCE(NULLIF(btrim(company_name), ''), $3), rep_name = COALESCE(NULLIF(btrim(rep_name), ''), $4)
+               WHERE id = $1 AND NOT is_admin AND NOT is_staff AND erp_staff_id IS NULL`,
+              [r.userId, r.erpStaffId, 'Premium K Staff · ' + r.name, r.name]);
+            done.CONVERT += u.rowCount;
+          } else if (r.action === 'LINK') {
+            const u = await client.query(
+              `UPDATE users SET erp_staff_id = $2, tier = 'tier1', approved = TRUE WHERE id = $1 AND is_staff AND erp_staff_id IS NULL`,
+              [r.userId, r.erpStaffId]);
+            done.LINK += u.rowCount;
+          }
+        }
+        if (includeDeactivate) {
+          for (const d of deactivate) {
+            const u = await client.query(`UPDATE users SET is_staff = FALSE, must_change_password = FALSE WHERE id = $1 AND is_staff`, [d.userId]);
+            done.DEACTIVATE += u.rowCount;
+          }
+        }
+        for (const k of Object.keys(want)) {
+          if (done[k] !== want[k]) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: 'APPLY_MISMATCH', message: '반영 건수가 미리보기와 달라 전부 취소했습니다.', done, want });
+          }
+        }
+        await client.query('COMMIT');
+        return res.json({ ok: true, done });
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('[erpStaffSync]', e.message);
+        return res.status(500).json({ error: 'SERVER_ERROR', message: '반영 중 오류가 나서 전부 취소했습니다.' });
+      } finally {
+        client.release();
+      }
+    }
 
     // 직원 계정 새로 만들기 (관리자 화면 "직원 추가") — 휴대폰 번호 로그인, 처음 비밀번호 000000,
     // 첫 로그인 때 본인 비밀번호로 변경 필수, 승인됨·플래티늄·직원 표시. 이미 있는 번호면 만들지 않고 알려줌.

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0C1630">
 <title>Premium K · 관리자</title>
 <style>
-/* 관리자 화면 v2.1 (2026-10-12) — 직원 추가·직원 지정 추가. v2.0: 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
+/* 관리자 화면 v2.2 (2026-10-12) — ERP 직원 불러오기. v2.1: 직원 추가·직원 지정. v2.0: 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
 :root{
   --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --gold-soft:#E8D49A; --ink:#1C2333; --ink2:#5B6272; --ink3:#8A90A0;
   --bg:#F3F4F7; --card:#fff; --line:#E3E6EC; --green:#1E7A46; --green-bg:#E7F6EC; --amber:#8A4B00; --amber-bg:#FFF3E2;
@@ -164,7 +164,7 @@ button.row:active{background:#F6F7FA}
 <div id="dashboard" class="hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.1</small></div>
+      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.2</small></div>
       <button class="logout" onclick="adminLogout()">로그아웃</button>
     </div>
   </header>
@@ -185,7 +185,10 @@ button.row:active{background:#F6F7FA}
         <input id="memberSearch" placeholder="상호명·전화번호·이메일 검색" oninput="memberShown=PAGE;renderMembers()">
       </div>
       <div class="chips" id="memberChips"></div>
-      <button class="btn ghost block" style="margin-bottom:10px" onclick="openAddStaff()">＋ 직원 추가 (이름 · 전화번호)</button>
+      <div class="acts2" style="margin-bottom:10px">
+        <button class="btn gold" onclick="openErpStaff()">⇣ ERP 직원 불러오기</button>
+        <button class="btn ghost" onclick="openAddStaff()">＋ 직원 1명 추가</button>
+      </div>
       <div class="card" id="memberList"></div>
     </section>
 
@@ -518,6 +521,63 @@ async function toggleStaff() {
     await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, makeStaff: make }) });
     toast(make ? '직원으로 지정했습니다' : '직원 지정을 해제했습니다'); await refreshAfter(u.id);
   } catch (e) { alert('직원 지정 실패: ' + e.message); }
+}
+
+// ----- ERP 직원 불러오기 -----
+const ERP_LABEL = {
+  CREATE: ['새 직원 계정 만들기', '처음 비밀번호 000000 · 첫 로그인 때 변경', 'ok'],
+  CONVERT: ['기존 가입 계정을 직원으로 전환', '비밀번호·주문 내역 그대로', 'ok'],
+  LINK: ['이미 직원 계정 · ERP와 연결만', '바뀌는 것 없음 (ERP 번호 연결)', 'ok'],
+  OK: ['이미 연결됨', '할 일 없음', 't3'],
+  SKIP_PHONE: ['건너뜀 · 번호 없음/형식 오류', 'ERP에서 휴대폰 번호를 고쳐주세요', 'pending'],
+  SKIP_DUP: ['건너뜀 · 직원끼리 번호 중복', 'ERP에서 번호를 확인해주세요', 'pending'],
+  SKIP_ADMIN: ['건너뜀 · 관리자 계정', '필요하면 회원 상세에서 직접 직원 지정', 'pending'],
+  SKIP_OTHER_ERP: ['건너뜀 · 다른 ERP 직원과 연결된 번호', 'ERP 번호를 확인해주세요', 'pending'],
+  DEACTIVATE: ['ERP에서 퇴사 처리된 직원', '체크하면 직원 표시만 해제 (계정은 남음)', 'red'],
+};
+let erpPreview = null;
+async function openErpStaff() {
+  sheetUser = null; erpPreview = null;
+  $('sheet').innerHTML = `<div class="grab"></div><h3>ERP 직원 불러오기</h3><div class="empty">ERP에서 재직 직원 명단을 불러오는 중…</div>`;
+  $('sheetBg').classList.add('open'); $('sheet').classList.add('open');
+  try { erpPreview = await api('/admin/users?action=erpStaffPreview'); renderErpSheet(); }
+  catch (e) {
+    $('sheet').innerHTML = `<div class="grab"></div><h3>ERP 직원 불러오기</h3><div class="empty" style="color:var(--red)">${escapeHtml(e.message)}</div>
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>`;
+  }
+}
+function renderErpSheet() {
+  const p = erpPreview, c = p.counts || {};
+  const groups = ['CREATE', 'CONVERT', 'LINK', 'DEACTIVATE', 'SKIP_PHONE', 'SKIP_DUP', 'SKIP_ADMIN', 'SKIP_OTHER_ERP', 'OK'];
+  const all = p.plan.concat(p.deactivate || []);
+  const last4 = ph => ph && ph.length >= 4 ? '***-' + ph.slice(-4) : '번호 없음';
+  const n = c.CREATE || 0, v = c.CONVERT || 0, l = c.LINK || 0, d = c.DEACTIVATE || 0;
+  $('sheet').innerHTML = `<div class="grab"></div><h3>ERP 직원 불러오기</h3>
+    <div class="phone" style="font-size:14px">ERP 재직 직원 ${p.rosterCount}명을 Site Order 계정과 맞춰 봤습니다. 아직 아무것도 바뀌지 않았습니다.</div>
+    ${groups.filter(g => c[g]).map(g => {
+      const [t, s, cls] = ERP_LABEL[g]; const L = all.filter(x => x.action === g);
+      return `<div class="label">${t} <span class="b ${cls}">${L.length}명</span></div>
+        <div class="card">${L.slice(0, 60).map(x => `<div class="row"><div class="main"><div class="t">${escapeHtml(x.name || '(이름 없음)')}</div>
+          <div class="s">${escapeHtml(last4(x.phone))}${x.current ? ' · 지금: ' + escapeHtml(x.current) : ''}</div></div></div>`).join('')}</div>
+        <div class="note">${s}</div>`;
+    }).join('')}
+    ${d ? `<label style="display:flex;gap:10px;align-items:center;margin:14px 2px 0;min-height:44px;font-weight:700"><input type="checkbox" id="erpDeact" style="width:22px;height:22px"> 퇴사 직원 ${d}명 직원 표시 해제</label>` : ''}
+    <div class="acts">
+      ${n + v + l + d ? `<button class="btn gold block" id="erpApplyBtn" onclick="applyErpStaff()">반영하기 (새 계정 ${n} · 전환 ${v} · 연결 ${l}${d ? ' · 퇴사 해제는 체크 시' : ''})</button>` : '<div class="empty">반영할 것이 없습니다. 모두 최신 상태입니다 👍</div>'}
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>
+    </div>`;
+}
+async function applyErpStaff() {
+  const c = erpPreview.counts || {}; const inc = !!($('erpDeact') && $('erpDeact').checked);
+  const expected = { CREATE: c.CREATE || 0, CONVERT: c.CONVERT || 0, LINK: c.LINK || 0, DEACTIVATE: inc ? (c.DEACTIVATE || 0) : 0 };
+  if (!confirm(`ERP 직원 명단을 반영할까요?\n\n· 새 직원 계정 ${expected.CREATE}명\n· 기존 계정 직원 전환 ${expected.CONVERT}명\n· 직원 계정 ERP 연결 ${expected.LINK}명` + (inc ? `\n· 퇴사 직원 해제 ${expected.DEACTIVATE}명` : ''))) return;
+  $('erpApplyBtn').disabled = true;
+  try {
+    const r = await api('/admin/users', { method: 'POST', body: JSON.stringify({ action: 'erpStaffSync', expected, includeDeactivate: inc }) });
+    closeSheet(); await loadUsers(); setFilter('staff');
+    alert(`반영했습니다.\n\n새 직원 계정 ${r.done.CREATE}명 · 전환 ${r.done.CONVERT}명 · 연결 ${r.done.LINK}명` + (inc ? ` · 퇴사 해제 ${r.done.DEACTIVATE}명` : '') +
+      (r.done.CREATE ? `\n\n새 직원에게: order.premium-k.com 에서 본인 휴대폰 번호와 000000으로 로그인한 뒤 본인 비밀번호로 바꾸라고 전해주세요.` : ''));
+  } catch (e) { alert('반영하지 않았습니다: ' + e.message); $('erpApplyBtn').disabled = false; }
 }
 
 // ----- 직원 추가 시트 -----
