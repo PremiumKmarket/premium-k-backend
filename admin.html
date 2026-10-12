@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0C1630">
 <title>Premium K · 관리자</title>
 <style>
-/* 관리자 화면 v2.0 (2026-10-12) — 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
+/* 관리자 화면 v2.1 (2026-10-12) — 직원 추가·직원 지정 추가. v2.0: 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
 :root{
   --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --gold-soft:#E8D49A; --ink:#1C2333; --ink2:#5B6272; --ink3:#8A90A0;
   --bg:#F3F4F7; --card:#fff; --line:#E3E6EC; --green:#1E7A46; --green-bg:#E7F6EC; --amber:#8A4B00; --amber-bg:#FFF3E2;
@@ -164,7 +164,7 @@ button.row:active{background:#F6F7FA}
 <div id="dashboard" class="hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.0</small></div>
+      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.1</small></div>
       <button class="logout" onclick="adminLogout()">로그아웃</button>
     </div>
   </header>
@@ -185,6 +185,7 @@ button.row:active{background:#F6F7FA}
         <input id="memberSearch" placeholder="상호명·전화번호·이메일 검색" oninput="memberShown=PAGE;renderMembers()">
       </div>
       <div class="chips" id="memberChips"></div>
+      <button class="btn ghost block" style="margin-bottom:10px" onclick="openAddStaff()">＋ 직원 추가 (이름 · 전화번호)</button>
       <div class="card" id="memberList"></div>
     </section>
 
@@ -437,6 +438,7 @@ function renderSheet() {
     <div class="seg">${tierBtns}</div>
     <div class="acts">
       ${u.approved ? '' : `<button class="btn gold block" onclick="approveUser()">✓ ${TIER_SHORT[sheetTier]} 등급으로 승인</button>`}
+      <button class="btn ghost block" onclick="toggleStaff()">${u.is_staff ? '직원 해제' : '★ 직원으로 지정 (플래티늄 · 월 $100 크레딧)'}</button>
       <div class="acts2">
         <button class="btn ghost" onclick="resetPassword()">비밀번호 재설정</button>
         <button class="btn ghost" onclick="toggleAdmin()">${u.is_admin ? '관리자 해제' : '관리자 지정'}</button>
@@ -504,6 +506,63 @@ async function deleteUser() {
     closeSheet(); toast('계정을 삭제했습니다'); await loadUsers();
   } catch (e) { alert(e.message); }
 }
+async function toggleStaff() {
+  const u = sheetUser; if (!u) return;
+  const make = !u.is_staff;
+  const who = (u.company_name ? u.company_name + ' · ' : '') + fmtPhone(u.phone);
+  const ok = confirm(make
+    ? `${who}\n\n이 계정을 직원으로 지정할까요?\n\n· 플래티늄 등급 · 승인됨으로 바뀝니다\n· 매달 $100 직원 크레딧, 낱개 1개도 플래티늄 가격\n· 비밀번호와 주문 내역은 그대로입니다`
+    : `${who}\n\n직원 지정을 해제할까요?\n(직원 크레딧이 없어집니다. 등급·승인 상태는 그대로이니 필요하면 따로 바꿔주세요.)`);
+  if (!ok) return;
+  try {
+    await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, makeStaff: make }) });
+    toast(make ? '직원으로 지정했습니다' : '직원 지정을 해제했습니다'); await refreshAfter(u.id);
+  } catch (e) { alert('직원 지정 실패: ' + e.message); }
+}
+
+// ----- 직원 추가 시트 -----
+function openAddStaff() {
+  sheetUser = null;
+  $('sheet').innerHTML = `<div class="grab"></div>
+    <h3>직원 추가</h3>
+    <div class="phone" style="font-size:14px">Site Order에 아직 가입하지 않은 직원을 바로 만듭니다.</div>
+    <div class="label">이름</div>
+    <input id="newStaffName" class="field" placeholder="예: 김민수" autocomplete="off">
+    <div class="label">휴대폰 번호</div>
+    <input id="newStaffPhone" class="field" placeholder="예: 213-555-1234" inputmode="tel" autocomplete="off">
+    <dl class="info">
+      <div><dt>로그인</dt><dd>이 휴대폰 번호 + 처음 비밀번호 <b>000000</b></dd></div>
+      <div><dt>첫 로그인</dt><dd>본인 비밀번호 6자리로 바꿔야 가격이 보이고 주문할 수 있습니다</dd></div>
+      <div><dt>혜택</dt><dd>플래티늄 가격 · 낱개 1개도 주문 · 매달 1일 $100 크레딧</dd></div>
+    </dl>
+    <div class="acts">
+      <button class="btn gold block" id="addStaffBtn" onclick="createStaff()">직원 계정 만들기</button>
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>
+    </div>`;
+  $('sheetBg').classList.add('open'); $('sheet').classList.add('open');
+  setTimeout(() => $('newStaffName').focus(), 250);
+}
+async function createStaff() {
+  const name = $('newStaffName').value.trim(), phone = $('newStaffPhone').value.trim();
+  if (!name || !phone) { alert('이름과 휴대폰 번호를 넣어주세요.'); return; }
+  $('addStaffBtn').disabled = true;
+  try {
+    const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    const res = await fetch(API_BASE + '/admin/users', { method: 'POST', headers, body: JSON.stringify({ action: 'createStaff', name, phone }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409 && data.userId && !data.isStaff) {
+      if (confirm(`${fmtPhone(phone)} 은(는) 이미 가입된 번호입니다.\n\n그 계정을 직원으로 지정할까요?\n(비밀번호·주문 내역은 그대로, 플래티늄·승인·직원 크레딧 적용)`)) {
+        await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: data.userId, makeStaff: true }) });
+        closeSheet(); toast('기존 계정을 직원으로 지정했습니다'); await loadUsers();
+      } else { $('addStaffBtn').disabled = false; }
+      return;
+    }
+    if (!res.ok) throw new Error(data.message || data.error || '실패');
+    closeSheet(); await loadUsers(); setFilter('staff');
+    alert(`직원 계정을 만들었습니다.\n\n${name} · ${fmtPhone(data.user.phone)}\n처음 비밀번호: 000000\n\n직원에게 order.premium-k.com 에서 로그인한 뒤\n본인 비밀번호로 바꾸라고 전해주세요.`);
+  } catch (e) { alert('직원 계정 만들기 실패: ' + e.message); $('addStaffBtn').disabled = false; }
+}
+
 async function refreshAfter(id) {
   await loadUsers();
   const u = allUsers.find(x => String(x.id) === String(id));

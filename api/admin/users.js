@@ -5,6 +5,8 @@
 //           password for that user (used for the "forgot password" flow —
 //           see api/auth/reset.js, which just emails the admin the phone
 //           number; the admin resets it here and tells the customer)
+//        -> { action:'createStaff', name, phone } — 직원 계정 새로 만들기
+//        -> { userId, makeStaff: true|false } — 기존 계정 직원 지정/해제
 // DELETE -> { userId } — permanently delete a user account
 
 const bcrypt = require('bcryptjs');
@@ -48,7 +50,45 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    const { userId, approved, newPassword, tier, isAdmin } = req.body;
+    const { userId, approved, newPassword, tier, isAdmin, action, makeStaff } = req.body;
+
+    // 직원 계정 새로 만들기 (관리자 화면 "직원 추가") — 휴대폰 번호 로그인, 처음 비밀번호 000000,
+    // 첫 로그인 때 본인 비밀번호로 변경 필수, 승인됨·플래티늄·직원 표시. 이미 있는 번호면 만들지 않고 알려줌.
+    if (action === 'createStaff') {
+      const name = String(req.body.name || '').trim().slice(0, 60);
+      let phone = String(req.body.phone || '').replace(/[^0-9]/g, '');
+      if (phone.length === 11 && phone[0] === '1') phone = phone.slice(1);
+      if (!name) return res.status(400).json({ error: 'MISSING_NAME', message: '직원 이름을 넣어주세요.' });
+      if (!/^[0-9]{10}$/.test(phone)) return res.status(400).json({ error: 'INVALID_PHONE', message: '휴대폰 번호 10자리를 넣어주세요.' });
+      const { rows: ex } = await db.query('SELECT id, is_staff FROM users WHERE phone = $1', [phone]);
+      if (ex[0]) {
+        return res.status(409).json({ error: 'PHONE_EXISTS', userId: ex[0].id, isStaff: !!ex[0].is_staff,
+          message: ex[0].is_staff ? '이미 직원 계정이 있는 번호입니다.' : '이미 가입된 번호입니다.' });
+      }
+      const passwordHash = await bcrypt.hash('000000', 10);
+      const { rows } = await db.query(
+        `INSERT INTO users (phone, password_hash, company_name, rep_name, approved, approved_at, tier, is_staff, must_change_password)
+         VALUES ($1, $2, $3, $4, TRUE, now(), 'tier1', TRUE, TRUE)
+         RETURNING id, phone, company_name, tier, approved, is_staff, must_change_password`,
+        [phone, passwordHash, 'Premium K Staff · ' + name, name]
+      );
+      return res.status(201).json({ user: rows[0] });
+    }
+
+    // 기존 계정을 직원으로 지정/해제. 지정: 직원 표시 + 승인 + 플래티늄 (비밀번호·주문 내역은 그대로).
+    // 해제: 직원 표시만 끔 (등급·승인은 그대로 — 필요하면 관리자가 따로 바꿈).
+    if (makeStaff !== undefined) {
+      const { rows } = makeStaff
+        ? await db.query(
+            `UPDATE users SET is_staff = TRUE, tier = 'tier1', approved = TRUE, approved_at = COALESCE(approved_at, now()),
+                    company_name = COALESCE(NULLIF(btrim(company_name), ''), 'Premium K Staff')
+             WHERE id = $1 RETURNING id, phone, is_staff, tier, approved`, [userId])
+        : await db.query(
+            `UPDATE users SET is_staff = FALSE, must_change_password = FALSE
+             WHERE id = $1 RETURNING id, phone, is_staff, tier, approved`, [userId]);
+      if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      return res.json({ user: rows[0] });
+    }
 
     if (newPassword !== undefined) {
       if (!/^[0-9]{6}$/.test(newPassword)) {
