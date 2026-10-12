@@ -2,302 +2,291 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Premium K · Product Catalog 상품 관리</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0C1630">
+<title>Premium K · 상품 관리</title>
 <style>
-:root{ --navy:#0B1B33; --orange:#E05D00; --bg:#F4F5F7; --line:#E2E5EA; --text:#1C2333; --text-2:#5B6272; --green:#1E7A46; --red:#B3261E; }
-*{box-sizing:border-box;}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);margin:0;padding:16px;color:var(--text);}
-h1{font-size:18px;color:var(--navy);}
-.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;}
-button{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-weight:700;}
-button.secondary{background:var(--bg);color:var(--navy);border:1px solid var(--line);}
-button.danger{background:var(--red);}
-button.small{padding:5px 9px;font-size:11.5px;}
-input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
-.toolbar select, .toolbar input{flex:1;min-width:140px;}
-#loginBox{max-width:320px;margin:60px auto;}
-.plist{display:flex;flex-direction:column;gap:10px;}
-.prow{display:flex;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px;align-items:flex-start;}
-.prow img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex-shrink:0;background:var(--bg);}
-.prow .noimg{width:56px;height:56px;border-radius:8px;border:1px dashed var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-2);text-align:center;}
-.pfields{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;}
-.pfields label{display:block;font-size:10px;color:var(--text-2);font-weight:700;margin-bottom:2px;}
-.pfields input{width:100%;}
-.pactions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
-.msg{font-size:11.5px;margin-top:4px;}
-.msg.ok{color:var(--green);} .msg.err{color:var(--red);}
-.newform{display:none;border:1px dashed var(--orange);border-radius:10px;padding:12px;margin-bottom:12px;}
-.newform.open{display:block;}
-.newform .pfields{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:8px;}
-.newform .pfields label{font-size:11px;color:var(--text-2);font-weight:700;}
-.newform input{width:100%;}
-.count-badge{font-size:11px;color:var(--text-2);}
-/* v8.3 모바일 — 상품 한 줄을 [사진·버튼] 위, [입력칸 2열] 아래로 배치 */
-@media (max-width:640px){
-  body{padding:12px;}
-  .card{padding:12px;}
-  button{min-height:40px;padding:9px 14px;font-size:13.5px;}
-  button.small{min-height:38px;padding:8px 12px;font-size:13px;}
-  input,select,textarea{font-size:16px;}
-  .toolbar select,.toolbar input{flex:1 1 100%;min-width:0;}
-  .toolbar button{flex:1;}
-  .prow{display:grid;grid-template-columns:56px 1fr;gap:10px;}
-  .prow .pfields{grid-column:1 / -1;grid-row:2;grid-template-columns:1fr 1fr;}
-  .prow .pactions{grid-column:2;grid-row:1;flex-direction:row;justify-content:flex-end;align-self:center;}
-  .prow .msg{grid-column:1 / -1;}
-  .pfields label{font-size:11px;}
-  .pfields > div:has(.f-url), .pfields > div:has(.f-img), .pfields > div:has(.f-nameKo), .pfields > div:has(.f-nameEn){grid-column:1 / -1;}
-  .newform .pfields{grid-template-columns:1fr 1fr;}
-  #newForm > div:last-of-type button{min-width:110px;}
+/* 상품 관리 v2.0 (2026-10-12) — 휴대폰 우선. 검색·카테고리 → 상품 목록 → 누르면 수정 시트 */
+:root{
+  --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --ink:#1C2333; --ink2:#5B6272; --ink3:#8A90A0;
+  --bg:#F3F4F7; --line:#E3E6EC; --green:#1E7A46; --red:#B3261E; --red-bg:#FCE8E6; --amber:#8A4B00; --amber-bg:#FFF3E2;
 }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit;font-size:16px}
+.hidden{display:none !important}
+#loginBox{max-width:360px;margin:0 auto;padding:64px 20px}
+#loginBox .brand{font-weight:800;font-size:26px;color:var(--navy)}
+#loginBox .brand b{color:var(--gold)}
+#loginBox .sub{color:var(--ink2);margin:4px 0 24px}
+.field{display:block;width:100%;border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;padding:13px 16px;font-weight:700;min-height:48px}
+.btn.primary{background:var(--navy);color:#fff}
+.btn.gold{background:var(--gold);color:var(--navy)}
+.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line)}
+.btn.danger{background:#fff;color:var(--red);border:1px solid #F1C4C0}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5}
+.err{color:var(--red);font-size:14px;margin-top:8px;min-height:20px}
+
+.top{position:sticky;top:0;z-index:20;background:var(--navy);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 12px}
+.top-row{display:flex;align-items:center;gap:10px;max-width:760px;margin:0 auto}
+.back{color:#fff;text-decoration:none;font-weight:700;font-size:14px;background:rgba(255,255,255,.12);border-radius:10px;padding:9px 12px;min-height:40px;display:inline-flex;align-items:center}
+.top h1{font-size:18px;margin:0;flex:1}
+.top h1 small{font-size:12px;color:#9FB0D4;font-weight:600;margin-left:6px}
+.search{position:relative;max-width:760px;margin:10px auto 0}
+.search input{width:100%;border:none;border-radius:12px;padding:12px 14px 12px 40px;background:#fff}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--ink3)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:10px 14px;scrollbar-width:none;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:var(--topH,120px);z-index:15}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;min-height:38px}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+main{padding:12px 14px calc(100px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+.count{font-size:13px;color:var(--ink2);margin:2px 4px 8px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:none;border-top:1px solid var(--line);width:100%;background:none;text-align:left;color:inherit}
+.row:first-child{border-top:none}
+.row:active{background:#F6F7FA}
+.thumb{width:58px;height:58px;border-radius:10px;object-fit:cover;background:var(--bg);flex-shrink:0;border:1px solid var(--line)}
+.nothumb{width:58px;height:58px;border-radius:10px;border:1px dashed #C9CED8;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--ink3);text-align:center;line-height:1.2}
+.row .main{flex:1;min-width:0}
+.row .t{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:13px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .p{font-size:13.5px;margin-top:2px}
+.row .p b{font-size:15px}
+.row .p .tbd{background:var(--amber-bg);color:var(--amber);font-weight:700;border-radius:999px;padding:1px 8px;font-size:12px}
+.chev{color:var(--ink3);flex-shrink:0}
+.empty{padding:28px 16px;text-align:center;color:var(--ink2);font-size:14px}
+.more{display:block;width:100%;border:none;border-top:1px solid var(--line);background:#FAFBFC;color:var(--navy);font-weight:700;padding:14px;min-height:48px}
+.fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:25;background:var(--gold);color:var(--navy);border:none;border-radius:999px;padding:15px 20px;font-weight:800;font-size:15px;box-shadow:0 6px 18px rgba(12,22,48,.25);min-height:52px}
+.foot{margin-top:24px;text-align:center}
+.foot button{background:none;border:none;color:var(--ink3);font-size:13px;text-decoration:underline;padding:12px;min-height:44px}
+
+.sheet-bg{position:fixed;inset:0;background:rgba(12,22,48,.45);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet-bg.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;background:#fff;border-radius:20px 20px 0 0;max-height:92vh;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease;padding:8px 18px calc(18px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+.sheet.open{transform:none}
+.grab{width:40px;height:5px;border-radius:3px;background:#D5D9E0;margin:4px auto 10px}
+.sheet h3{margin:0 0 2px;font-size:19px;color:var(--navy)}
+.sheet .skuline{color:var(--ink2);font-size:13.5px}
+.photo{display:flex;gap:12px;align-items:center;margin:14px 0 4px}
+.photo img,.photo .nothumb{width:84px;height:84px;border-radius:12px}
+.photo img{object-fit:cover;border:1px solid var(--line)}
+.lbl{display:block;font-size:13px;font-weight:700;color:var(--ink2);margin:12px 2px 6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2 .lbl{margin-top:12px}
+.hint{font-size:12.5px;color:var(--ink2);margin:6px 2px 0}
+.acts{display:grid;gap:8px;margin-top:18px}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:11px 16px;border-radius:12px;font-size:14px;font-weight:700;z-index:60;opacity:0;transition:all .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
 </style>
 </head>
 <body>
 
-<div id="loginBox" class="card">
-  <h1>Admin Login 관리자 로그인</h1>
-  <input id="phone" placeholder="Phone 휴대폰 번호" style="width:100%;margin-bottom:8px;">
-  <input id="password" type="password" maxlength="6" placeholder="Password 6 digits" style="width:100%;margin-bottom:8px;">
-  <button onclick="adminLogin()" style="width:100%;padding:10px;">Login 로그인</button>
-  <div id="loginErr" class="msg err"></div>
+<div id="loginBox">
+  <div class="brand">PREMIUM <b>K</b></div>
+  <div class="sub">상품 관리 · 관리자 로그인</div>
+  <input id="phone" class="field" style="margin-bottom:10px" placeholder="휴대폰 번호" inputmode="tel" autocomplete="username">
+  <input id="password" class="field" style="margin-bottom:10px" type="password" maxlength="6" inputmode="numeric" placeholder="비밀번호 6자리" autocomplete="current-password" onkeydown="if(event.key==='Enter')adminLogin()">
+  <button class="btn primary block" onclick="adminLogin()">로그인</button>
+  <div id="loginErr" class="err"></div>
 </div>
 
-<div id="dashboard" style="display:none;">
-  <h1>Product Catalog 상품 관리</h1>
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-      <div class="msg">First time only 최초 1회: 기존 상품 데이터를 DB로 가져옵니다.</div>
-      <button class="secondary" onclick="seedCatalog()">Import bundled catalog 카탈로그 가져오기</button>
+<div id="dashboard" class="hidden">
+  <header class="top" id="top">
+    <div class="top-row">
+      <a class="back" href="admin.html">‹ 관리자</a>
+      <h1>상품 관리<small>v2.0</small></h1>
     </div>
-    <div id="seedMsg" class="msg"></div>
-  </div>
-
-  <div class="card">
-    <button onclick="toggleNewForm()">+ Add New Product 새 상품 추가</button>
-    <div class="newform" id="newForm">
-      <div class="pfields">
-        <div><label>SKU *</label><input id="nSku"></div>
-        <div><label>Category 카테고리 *</label><input id="nCat" placeholder="예: 수산물/건어물"></div>
-        <div><label>Name (KO) 한글명 *</label><input id="nNameKo"></div>
-        <div><label>Name (EN) 영문명</label><input id="nNameEn"></div>
-        <div><label>Unit Price 개당가격</label><input id="nPrice" type="number" step="0.01"></div>
-        <div><label>Carton Price 카톤가격</label><input id="nCtnPrice" type="number" step="0.01"></div>
-        <div><label>Carton Qty 카톤입수</label><input id="nCtnQty" type="number"></div>
-        <div><label>Product URL</label><input id="nUrl"></div>
-      </div>
-      <label style="font-size:11px;color:var(--text-2);font-weight:700;">Photo 사진</label><br>
-      <input type="file" id="nImgFile" accept="image/*" onchange="previewNewImg(event)"><br>
-      <img id="nImgPreview" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-top:6px;display:none;">
-      <div style="margin-top:10px;">
-        <button onclick="createProduct()">Create 생성</button>
-        <button class="secondary" onclick="toggleNewForm()">Cancel 취소</button>
-      </div>
-      <div id="newMsg" class="msg"></div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="searchBox" placeholder="상품명·영문명·SKU 검색" oninput="shown=PAGE;renderList()">
     </div>
-  </div>
-
-  <div class="card">
-    <div class="toolbar">
-      <select id="catFilter" onchange="loadProducts()"><option value="">All categories 전체 카테고리</option></select>
-      <input id="searchBox" placeholder="Search name/SKU 이름/SKU 검색" onkeydown="if(event.key==='Enter')loadProducts()">
-      <button onclick="loadProducts()">Search 검색</button>
-      <span class="count-badge" id="countBadge"></span>
-    </div>
-    <div class="plist" id="plist"></div>
-  </div>
+  </header>
+  <div class="chips" id="catChips"></div>
+  <main>
+    <div class="count" id="countBadge"></div>
+    <div class="card" id="plist"><div class="empty">불러오는 중…</div></div>
+    <div class="foot"><button onclick="seedCatalog()">처음 1회만: 기본 카탈로그 가져오기</button><div id="seedMsg" class="hint"></div></div>
+  </main>
+  <button class="fab" onclick="openNew()">＋ 새 상품</button>
 </div>
+
+<div class="sheet-bg" id="sheetBg" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="toast" id="toast"></div>
 
 <script>
 const API_BASE = 'https://premium-k-backend.vercel.app/api';
 let token = localStorage.getItem('pk_token');
-let newImgDataUrl = null;
+const $ = id => document.getElementById(id);
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+const money = n => (n === null || n === undefined || n === '') ? '' : '$' + Number(n).toFixed(2);
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
 
 async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(API_BASE + path, { ...options, headers });
   if (res.status === 204) return {};
-  const data = await res.json().catch(()=>({}));
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
   return data;
 }
-
 async function adminLogin() {
-  const phone = document.getElementById('phone').value.trim();
-  const password = document.getElementById('password').value.trim();
+  $('loginErr').textContent = '';
   try {
-    const data = await api('/auth/login', { method:'POST', body: JSON.stringify({ phone, password }) });
-    if (!data.isAdmin) { document.getElementById('loginErr').textContent = 'Not an admin account 관리자 계정이 아닙니다.'; return; }
-    token = data.token;
-    localStorage.setItem('pk_token', token);
-    document.getElementById('loginBox').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-    loadProducts();
-  } catch (e) {
-    document.getElementById('loginErr').textContent = e.message;
-  }
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ phone: $('phone').value.trim(), password: $('password').value.trim() }) });
+    if (!data.isAdmin) { $('loginErr').textContent = '관리자 계정이 아닙니다.'; return; }
+    token = data.token; localStorage.setItem('pk_token', token); enter();
+  } catch (e) { $('loginErr').textContent = e.message; }
+}
+function enter() {
+  $('loginBox').classList.add('hidden'); $('dashboard').classList.remove('hidden');
+  const fix = () => document.documentElement.style.setProperty('--topH', $('top').offsetHeight + 'px'); fix(); addEventListener('resize', fix);
+  loadProducts().catch(() => { localStorage.removeItem('pk_token'); location.reload(); });
 }
 
-async function seedCatalog(){
-  const msgEl = document.getElementById('seedMsg');
-  msgEl.className = 'msg';
-  msgEl.textContent = 'Importing... 가져오는 중...';
-  try {
-    const data = await api('/admin/products?action=seed');
-    msgEl.className = 'msg ok';
-    msgEl.textContent = data.message;
-    loadProducts();
-  } catch (e) {
-    msgEl.className = 'msg err';
-    msgEl.textContent = e.message;
-  }
+// ===== 상품 목록 =====
+const PAGE = 30;
+let all = [], togoPageImages = {}, cat = '', shown = PAGE;
+async function loadProducts() {
+  const data = await api('/admin/products');
+  all = data.products || []; togoPageImages = data.togoPageImages || {};
+  renderChips(); renderList();
+}
+const imgOf = p => p.img || (p.imgPage ? togoPageImages[p.imgPage] : null);
+function cats() { return [...new Set(all.map(p => p.cat).filter(Boolean))].sort(); }
+function renderChips() {
+  const counts = {}; all.forEach(p => counts[p.cat] = (counts[p.cat] || 0) + 1);
+  $('catChips').innerHTML = `<button class="chip ${cat === '' ? 'on' : ''}" onclick="pickCat('')">전체 ${all.length}</button>` +
+    cats().map((c, i) => `<button class="chip ${cat === c ? 'on' : ''}" data-i="${i}" onclick="pickCat(this.dataset.c)" data-c="${escapeHtml(c)}">${escapeHtml(c)} ${counts[c]}</button>`).join('');
+}
+function pickCat(c) { cat = c; shown = PAGE; renderChips(); renderList(); window.scrollTo(0, 0); }
+function filtered() {
+  const q = $('searchBox').value.trim().toLowerCase();
+  return all.filter(p => (!cat || p.cat === cat) &&
+    (!q || (p.nameKo || '').toLowerCase().includes(q) || (p.nameEn || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)));
+}
+function renderList() {
+  const L = filtered();
+  $('countBadge').textContent = `${L.length}개 상품` + (cat ? ` · ${cat}` : '');
+  if (!L.length) { $('plist').innerHTML = '<div class="empty">상품이 없습니다.</div>'; return; }
+  $('plist').innerHTML = L.slice(0, shown).map(p => {
+    const img = imgOf(p);
+    const price = p.tbd ? '<span class="tbd">가격 문의</span>' :
+      `<b>${money(p.price)}</b> 개당${p.ctnPrice ? ` · ${money(p.ctnPrice)} 박스` : ''}${p.ctnQty ? ` (${p.ctnQty}개)` : ''}`;
+    return `<button class="row" onclick="openEdit('${escapeHtml(p.id)}')">
+      ${img ? `<img class="thumb" loading="lazy" src="${escapeHtml(img)}" alt="">` : '<div class="nothumb">사진<br>없음</div>'}
+      <div class="main"><div class="t">${escapeHtml(p.nameKo || p.nameEn || p.sku)}</div>
+        <div class="s">${escapeHtml(p.sku)}${p.nameEn ? ' · ' + escapeHtml(p.nameEn) : ''}</div>
+        <div class="p">${price}</div></div>
+      <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg></button>`;
+  }).join('') + (L.length > shown ? `<button class="more" onclick="shown+=${PAGE};renderList()">더 보기 (${L.length - shown}개 남음)</button>` : '');
 }
 
-function toggleNewForm(){
-  document.getElementById('newForm').classList.toggle('open');
+// ===== 수정 / 새 상품 시트 =====
+let editing = null, newImg = null;
+function openEdit(id) { editing = all.find(p => String(p.id) === String(id)); if (!editing) return; newImg = null; renderSheet(); openSheet(); }
+function openNew() { editing = { id: null, sku: '', cat: cat || '', nameKo: '', nameEn: '', price: '', ctnPrice: '', ctnQty: '', url: '' }; newImg = null; renderSheet(); openSheet(); }
+function openSheet() { $('sheetBg').classList.add('open'); $('sheet').classList.add('open'); }
+function closeSheet() { $('sheetBg').classList.remove('open'); $('sheet').classList.remove('open'); editing = null; }
+function renderSheet() {
+  const p = editing, isNew = !p.id, img = newImg || imgOf(p);
+  const v = x => escapeHtml(x === null || x === undefined ? '' : x);
+  $('sheet').innerHTML = `<div class="grab"></div>
+    <h3>${isNew ? '새 상품 추가' : v(p.nameKo || p.sku)}</h3>
+    <div class="skuline">${isNew ? '* 표시는 꼭 넣어야 합니다' : 'SKU ' + v(p.sku)}</div>
+    <div class="photo">${img ? `<img id="fImgPrev" src="${escapeHtml(img)}" alt="">` : '<div class="nothumb" id="fImgPrev">사진<br>없음</div>'}
+      <div><label class="btn ghost" style="min-height:44px">📷 ${img ? '사진 바꾸기' : '사진 넣기'}<input type="file" accept="image/*" class="hidden" onchange="pickPhoto(event)"></label>
+      <div class="hint">휴대폰 사진은 자동으로 줄여서 올립니다</div></div></div>
+    ${isNew ? `<label class="lbl">SKU *</label><input class="field" id="fSku" value="${v(p.sku)}" autocapitalize="characters">` : ''}
+    <label class="lbl">한글 상품명 *</label><input class="field" id="fNameKo" value="${v(p.nameKo)}">
+    <label class="lbl">영문 상품명</label><input class="field" id="fNameEn" value="${v(p.nameEn)}">
+    <label class="lbl">카테고리 *</label><input class="field" id="fCat" value="${v(p.cat)}" list="catList">
+    <datalist id="catList">${cats().map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+    <div class="grid2">
+      <div><label class="lbl">개당 가격 ($)</label><input class="field" id="fPrice" type="number" inputmode="decimal" step="0.01" value="${v(p.price)}"></div>
+      <div><label class="lbl">박스 가격 ($)</label><input class="field" id="fCtnPrice" type="number" inputmode="decimal" step="0.01" value="${v(p.ctnPrice)}"></div>
+      <div><label class="lbl">박스 입수 (개)</label><input class="field" id="fCtnQty" type="number" inputmode="numeric" value="${v(p.ctnQty)}"></div>
+    </div>
+    <label class="lbl">상세 페이지 주소 (URL)</label><input class="field" id="fUrl" value="${v(p.url)}" inputmode="url" autocapitalize="off">
+    <div class="hint">여기 넣는 가격이 플래티늄 가격입니다. 골드는 +10%, 실버는 +15%로 자동 계산됩니다.</div>
+    <div class="acts">
+      <button class="btn primary block" id="saveBtn" onclick="${isNew ? 'createProduct()' : 'saveProduct()'}">${isNew ? '상품 만들기' : '저장'}</button>
+      ${isNew ? '' : '<button class="btn danger block" onclick="deleteProduct()">상품 삭제</button>'}
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>
+    </div>`;
 }
-
-function previewNewImg(e){
-  const file = e.target.files[0];
-  if (!file) return;
+// 휴대폰 사진(수 MB)을 그대로 올리면 서버 용량 제한에 걸리므로, 긴 변 1000px JPEG로 줄여서 올림
+function pickPhoto(e) {
+  const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    newImgDataUrl = reader.result;
-    const img = document.getElementById('nImgPreview');
-    img.src = newImgDataUrl;
-    img.style.display = 'inline-block';
+    const im = new Image();
+    im.onload = () => {
+      const max = 1000, k = Math.min(1, max / Math.max(im.width, im.height));
+      const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      newImg = c.toDataURL('image/jpeg', 0.85);
+      const prev = $('fImgPrev');
+      if (prev.tagName === 'IMG') prev.src = newImg; else { const i = document.createElement('img'); i.id = 'fImgPrev'; i.src = newImg; prev.replaceWith(i); }
+    };
+    im.onerror = () => { newImg = reader.result; };
+    im.src = reader.result;
   };
   reader.readAsDataURL(file);
 }
-
-async function createProduct(){
-  const msgEl = document.getElementById('newMsg');
-  msgEl.className = 'msg';
-  const payload = {
-    sku: document.getElementById('nSku').value.trim(),
-    cat: document.getElementById('nCat').value.trim(),
-    nameKo: document.getElementById('nNameKo').value.trim(),
-    nameEn: document.getElementById('nNameEn').value.trim(),
-    price: parseFloat(document.getElementById('nPrice').value) || 0,
-    ctnPrice: parseFloat(document.getElementById('nCtnPrice').value) || null,
-    ctnQty: parseInt(document.getElementById('nCtnQty').value) || null,
-    url: document.getElementById('nUrl').value.trim(),
-    img: newImgDataUrl,
+function formValues() {
+  const num = (id, int) => { const s = $(id).value.trim(); if (s === '') return null; return int ? parseInt(s) : parseFloat(s); };
+  return {
+    cat: $('fCat').value.trim(), nameKo: $('fNameKo').value.trim(), nameEn: $('fNameEn').value.trim(),
+    price: num('fPrice') || 0, ctnPrice: num('fCtnPrice'), ctnQty: num('fCtnQty', true), url: $('fUrl').value.trim(),
   };
+}
+async function saveProduct() {
+  const p = editing; if (!p) return;
+  const payload = { id: p.id, ...formValues() };
+  if (!payload.nameKo || !payload.cat) { alert('한글 상품명과 카테고리는 꼭 넣어주세요.'); return; }
+  if (newImg) payload.img = newImg;
+  $('saveBtn').disabled = true;
   try {
-    await api('/admin/products', { method:'POST', body: JSON.stringify(payload) });
-    msgEl.className = 'msg ok';
-    msgEl.textContent = 'Product created. 상품이 생성되었습니다.';
-    ['nSku','nCat','nNameKo','nNameEn','nPrice','nCtnPrice','nCtnQty','nUrl'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('nImgPreview').style.display = 'none';
-    newImgDataUrl = null;
-    loadProducts();
-  } catch (e) {
-    msgEl.className = 'msg err';
-    msgEl.textContent = e.message;
-  }
+    const r = await api('/admin/products', { method: 'PATCH', body: JSON.stringify(payload) });
+    const i = all.findIndex(x => String(x.id) === String(p.id)); if (i >= 0 && r.product) all[i] = r.product;
+    closeSheet(); renderChips(); renderList(); toast('저장했습니다');
+  } catch (e) { alert('저장 실패: ' + e.message); $('saveBtn').disabled = false; }
 }
-
-let allCats = [];
-let togoPageImages = {};
-async function loadProducts(){
-  const cat = document.getElementById('catFilter').value;
-  const search = document.getElementById('searchBox').value.trim();
-  const params = new URLSearchParams();
-  if (cat) params.set('cat', cat);
-  if (search) params.set('search', search);
-  const data = await api('/admin/products' + (params.toString() ? '?' + params.toString() : ''));
-  togoPageImages = data.togoPageImages || {};
-
-  if (!cat && !search) {
-    allCats = [...new Set(data.products.map(p => p.cat))].sort();
-    const sel = document.getElementById('catFilter');
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">All categories 전체 카테고리</option>' + allCats.map(c => `<option value="${c}">${c}</option>`).join('');
-    sel.value = cur;
-  }
-
-  document.getElementById('countBadge').textContent = `${data.products.length} items`;
-  const el = document.getElementById('plist');
-  el.innerHTML = data.products.map(p => {
-    const resolvedImg = p.img || (p.imgPage ? togoPageImages[p.imgPage] : null);
-    return `
-    <div class="prow" data-id="${p.id}">
-      ${resolvedImg ? `<img src="${resolvedImg}">` : `<div class="noimg">No photo</div>`}
-      <div class="pfields">
-        <div><label>SKU</label><input value="${p.sku}" disabled></div>
-        <div><label>Category</label><input class="f-cat" value="${p.cat}"></div>
-        <div><label>Name (KO)</label><input class="f-nameKo" value="${(p.nameKo||'').replace(/"/g,'&quot;')}"></div>
-        <div><label>Name (EN)</label><input class="f-nameEn" value="${(p.nameEn||'').replace(/"/g,'&quot;')}"></div>
-        <div><label>Unit $</label><input class="f-price" type="number" step="0.01" value="${p.price}"></div>
-        <div><label>Carton $</label><input class="f-ctnPrice" type="number" step="0.01" value="${p.ctnPrice ?? ''}"></div>
-        <div><label>Carton Qty</label><input class="f-ctnQty" type="number" value="${p.ctnQty ?? ''}"></div>
-        <div><label>URL</label><input class="f-url" value="${p.url ?? ''}"></div>
-        <div><label>Photo</label><input type="file" class="f-img" accept="image/*" onchange="previewRowImg(event,'${p.id}')"></div>
-      </div>
-      <div class="pactions">
-        <button class="small" onclick="saveProduct('${p.id}')">Save 저장</button>
-        <button class="danger small" onclick="deleteProduct('${p.id}','${(p.nameKo||'').replace(/'/g,"")}')">Delete 삭제</button>
-      </div>
-      <div class="msg" id="rowmsg-${p.id}" style="display:none;"></div>
-    </div>
-  `;
-  }).join('');
-}
-
-const rowImgData = {};
-function previewRowImg(e, id){
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => { rowImgData[id] = reader.result; };
-  reader.readAsDataURL(file);
-}
-
-async function saveProduct(id){
-  const row = document.querySelector(`.prow[data-id="${id}"]`);
-  const msgEl = document.getElementById(`rowmsg-${id}`);
-  const payload = {
-    id,
-    cat: row.querySelector('.f-cat').value.trim(),
-    nameKo: row.querySelector('.f-nameKo').value.trim(),
-    nameEn: row.querySelector('.f-nameEn').value.trim(),
-    price: parseFloat(row.querySelector('.f-price').value) || 0,
-    ctnPrice: row.querySelector('.f-ctnPrice').value ? parseFloat(row.querySelector('.f-ctnPrice').value) : null,
-    ctnQty: row.querySelector('.f-ctnQty').value ? parseInt(row.querySelector('.f-ctnQty').value) : null,
-    url: row.querySelector('.f-url').value.trim(),
-  };
-  if (rowImgData[id]) payload.img = rowImgData[id];
-
+async function createProduct() {
+  const payload = { sku: $('fSku').value.trim(), ...formValues(), img: newImg };
+  if (!payload.sku || !payload.nameKo || !payload.cat) { alert('SKU, 한글 상품명, 카테고리는 꼭 넣어주세요.'); return; }
+  $('saveBtn').disabled = true;
   try {
-    await api('/admin/products', { method:'PATCH', body: JSON.stringify(payload) });
-    msgEl.className = 'msg ok'; msgEl.style.display = 'block';
-    msgEl.textContent = 'Saved 저장됨';
-    setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
-  } catch (e) {
-    msgEl.className = 'msg err'; msgEl.style.display = 'block';
-    msgEl.textContent = e.message;
-  }
+    await api('/admin/products', { method: 'POST', body: JSON.stringify(payload) });
+    closeSheet(); toast('새 상품을 만들었습니다'); await loadProducts();
+  } catch (e) { alert('만들기 실패: ' + e.message); $('saveBtn').disabled = false; }
 }
-
-async function deleteProduct(id, name){
-  if (!confirm(`Delete "${name}"? 이 상품을 삭제할까요?`)) return;
+async function deleteProduct() {
+  const p = editing; if (!p) return;
+  if (!confirm(`"${p.nameKo || p.sku}" 상품을 삭제할까요?\n삭제하면 주문 화면에서도 사라지고 되돌릴 수 없습니다.`)) return;
   try {
-    await api('/admin/products', { method:'DELETE', body: JSON.stringify({ id }) });
-    loadProducts();
-  } catch (e) {
-    alert(e.message);
-  }
+    await api('/admin/products', { method: 'DELETE', body: JSON.stringify({ id: p.id }) });
+    all = all.filter(x => String(x.id) !== String(p.id));
+    closeSheet(); renderChips(); renderList(); toast('삭제했습니다');
+  } catch (e) { alert(e.message); }
+}
+async function seedCatalog() {
+  if (!confirm('기본 카탈로그를 가져올까요?\n(처음 설치할 때 1회만 쓰는 기능입니다. 이미 있는 상품은 그대로 둡니다.)')) return;
+  $('seedMsg').textContent = '가져오는 중…';
+  try { const d = await api('/admin/products?action=seed'); $('seedMsg').textContent = d.message || '완료'; await loadProducts(); }
+  catch (e) { $('seedMsg').textContent = e.message; }
 }
 
-if (token) {
-  document.getElementById('loginBox').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'block';
-  loadProducts().catch(()=>{ localStorage.removeItem('pk_token'); location.reload(); });
-}
+if (token) enter();
 </script>
 </body>
 </html>
