@@ -2,61 +2,59 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0C1630">
 <title>Premium K · 내 계정 My Account</title>
 <style>
+/* 내 계정 v2.0 (2026-10-12) — 주문 사이트와 같은 남색·금색, 휴대폰 우선 */
 :root{
-  --navy:#0B1B33; --orange:#E05D00; --bg:#F4F5F7; --card:#FFFFFF;
-  --line:#E2E5EA; --text:#1C2333; --text-2:#5B6272; --green:#1E7A46; --red:#B3261E;
+  --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --orange:#C9A456; --bg:#F3F4F7; --card:#FFFFFF;
+  --line:#E3E6EC; --text:#1C2333; --text-2:#5B6272; --green:#1E7A46; --red:#B3261E;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);margin:0;padding:0;color:var(--text);padding-bottom:40px;}
-.brand{background:linear-gradient(180deg,var(--navy),#132749);padding:16px 18px;position:sticky;top:0;z-index:10;}
-.brand .title{color:#fff;font-size:16px;font-weight:700;}
-.brand .sub{color:#B9C2D6;font-size:12px;margin-top:2px;}
-.wrap{padding:14px 16px;max-width:640px;margin:0 auto;}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;}
-h2{font-size:14px;color:var(--navy);margin:0 0 12px;}
-.field{margin-bottom:10px;}
-.field label{display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px;}
-input, textarea{border:1px solid var(--line);border-radius:9px;padding:10px 11px;font-size:14px;width:100%;box-sizing:border-box;font-family:inherit;}
-textarea{min-height:56px;resize:vertical;}
-button{background:var(--navy);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;}
-button.secondary{background:var(--bg);color:var(--navy);border:1px solid var(--line);}
-button.danger{background:var(--red);}
-button.small{padding:6px 10px;font-size:11.5px;}
-.msg{font-size:12px;margin-top:8px;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);margin:0;color:var(--text);padding-bottom:40px;font-size:15px;}
+.brand{background:var(--navy);padding:calc(12px + env(safe-area-inset-top)) 18px 14px;position:sticky;top:0;z-index:10;}
+.brand .title{color:#fff;font-size:17px;font-weight:800;letter-spacing:.3px;}
+.brand .title b{color:var(--gold);}
+.brand .sub{color:#B9C4DE;font-size:13px;margin-top:2px;}
+.brand a{color:#fff;font-size:14px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;background:rgba(255,255,255,.12);border-radius:10px;padding:9px 12px;margin-top:10px;min-height:40px;}
+.wrap{padding:14px;max-width:640px;margin:0 auto;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;}
+h2{font-size:16px;color:var(--navy);margin:0 0 12px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:6px;}
+input, textarea{border:1px solid var(--line);border-radius:12px;padding:12px 13px;font-size:16px;width:100%;font-family:inherit;background:#fff;}
+input:disabled{background:#F6F7F9;color:var(--text);}
+textarea{min-height:64px;resize:vertical;}
+button{background:var(--navy);color:#fff;border:none;border-radius:12px;padding:13px 16px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;width:100%;font-family:inherit;}
+button.secondary{background:#fff;color:var(--navy);border:1px solid var(--line);}
+button.danger{background:#fff;color:var(--red);border:1px solid #F1C4C0;}
+button.small{padding:9px 12px;font-size:13.5px;min-height:40px;width:auto;}
+.msg{font-size:14px;margin-top:8px;}
 .msg.err{color:var(--red);}
 .msg.ok{color:var(--green);}
-.addr-item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-.addr-item .pill{font-size:10px;font-weight:700;color:var(--orange);border:1px solid var(--orange);border-radius:999px;padding:1px 7px;margin-left:6px;}
-.order-item{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px;font-size:13px;}
-.order-item .meta{color:var(--text-2);font-size:11.5px;margin-top:2px;}
-.order-item pre{white-space:pre-wrap;font-size:11.5px;background:var(--bg);border-radius:8px;padding:8px;margin-top:8px;max-height:200px;overflow-y:auto;display:none;}
-a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer;}
-#loginGate{max-width:320px;margin:60px auto;text-align:center;}
-/* v8.3 모바일 — 누르는 곳 크기, 주문 상세 글자 줄바꿈 */
-.order-item pre{overflow-wrap:anywhere;}
-@media (max-width:640px){
-  #loginGate{margin:40px 16px;}
-  button.small{min-height:38px;padding:8px 12px;font-size:12.5px;}
-  a.linklike{display:inline-block;padding:10px 0;font-size:13px;}
-  .brand a{display:inline-block;padding:9px 0;}
-  #newAddrDefault{width:20px !important;height:20px;}
-  .addr-item .pill{font-size:11px;}
-  .addr-item{flex-wrap:wrap;}
-  .addr-item > div:last-child{flex-direction:row !important;width:100%;justify-content:flex-end;}
-  .order-item > div:first-child{flex-wrap:wrap;gap:4px;}
-}
+.addr-item{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;}
+.addr-item > div:first-child{flex:1 1 200px;min-width:0;}
+.addr-item > div:last-child{flex-direction:row !important;gap:8px !important;}
+.addr-item .pill{font-size:12px;font-weight:700;color:#7A5A12;background:#FBF1DA;border-radius:999px;padding:2px 8px;margin-left:6px;}
+.order-item{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;font-size:14px;}
+.order-item > div:first-child{display:flex;flex-wrap:wrap;gap:4px;justify-content:space-between;align-items:baseline;}
+.order-item > div:first-child > span:first-child{font-size:17px;}
+.order-item .meta{color:var(--text-2);font-size:13px;margin-top:3px;}
+.order-item pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;background:var(--bg);border-radius:10px;padding:10px;margin-top:8px;max-height:260px;overflow-y:auto;display:none;font-family:inherit;}
+a.linklike{color:var(--navy);font-size:14px;font-weight:700;text-decoration:underline;cursor:pointer;display:inline-block;padding:12px 0 8px;}
+#loginGate{max-width:360px;margin:32px auto;text-align:center;}
+#loginGate .field{text-align:left;}
+#newAddrDefault{width:20px !important;height:20px;flex-shrink:0;}
 </style>
 </head>
 <body>
 
 <div class="brand">
-  <div class="title">Premium K · 내 계정 My Account</div>
+  <div class="title">PREMIUM <b>K</b> · 내 계정 My Account</div>
   <div class="sub" id="whoami"></div>
   <div style="margin-top:8px;">
-    <a href="#" onclick="goBackToShop();return false;" style="color:#fff;font-size:12.5px;font-weight:700;text-decoration:underline;">← Back to Shopping 상품 주문하러 가기</a>
+    <a href="#" onclick="goBackToShop();return false;">‹ Back to Shopping 주문하러 가기</a>
   </div>
 </div>
 
@@ -97,8 +95,8 @@ a.linklike{color:var(--navy);font-size:12px;font-weight:700;text-decoration:unde
     <div id="addrList"></div>
     <div class="field" style="margin-top:10px;"><label>Label (e.g. Main Store, Branch 2) 주소 이름</label><input id="newAddrLabel" placeholder="Main Store 예: 본점"></div>
     <div class="field"><label>Address 주소</label><textarea id="newAddrText" placeholder="123 Main St, Los Angeles, CA 90001"></textarea></div>
-    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);margin-bottom:8px;">
-      <input type="checkbox" id="newAddrDefault" style="width:auto;"> Set as default 기본 주소로 설정
+    <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-2);margin:2px 0 12px;min-height:40px;">
+      <input type="checkbox" id="newAddrDefault"> Set as default 기본 주소로 설정
     </label>
     <button onclick="addAddress()">Add Address 주소 추가</button>
     <div id="addrMsg" class="msg"></div>

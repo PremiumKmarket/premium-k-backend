@@ -5,19 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premium K · 비밀번호 재설정 Reset Password</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F4F5F7;margin:0;padding:24px 16px;color:#1C2333;}
-.card{background:#fff;border:1px solid #E2E5EA;border-radius:14px;padding:20px;max-width:360px;margin:40px auto;}
-h1{font-size:17px;color:#0B1B33;margin-bottom:4px;}
-p.sub{font-size:12.5px;color:#5B6272;margin-bottom:16px;}
-input{border:1px solid #E2E5EA;border-radius:10px;padding:11px 12px;font-size:16px;width:100%;margin-bottom:10px;box-sizing:border-box;}
-button{background:#0B1B33;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;width:100%;cursor:pointer;}
-.msg{font-size:12.5px;margin-top:10px;text-align:center;}
+/* 비밀번호 재설정 v2.0 (2026-10-12) */
+body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:#F3F4F7;margin:0;padding:0 16px 24px;color:#1C2333;}
+.top{background:#0C1630;margin:0 -16px;padding:calc(14px + env(safe-area-inset-top)) 20px 14px;color:#fff;font-weight:800;font-size:18px;letter-spacing:.3px}
+.top b{color:#C9A456}
+.card{background:#fff;border:1px solid #E3E6EC;border-radius:16px;padding:20px;max-width:380px;margin:28px auto;}
+h1{font-size:19px;color:#0C1630;margin:0 0 6px;}
+p.sub{font-size:14px;color:#5B6272;margin:0 0 18px;line-height:1.5}
+input{border:1px solid #E3E6EC;border-radius:12px;padding:13px 14px;font-size:16px;width:100%;margin-bottom:10px;box-sizing:border-box;}
+button{background:#0C1630;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;width:100%;cursor:pointer;min-height:50px}
+.msg{font-size:14px;margin-top:12px;text-align:center;line-height:1.5}
 .msg.err{color:#B3261E;}
 .msg.ok{color:#1E7A46;}
 </style>
 </head>
 <body>
-
+<div class="top">PREMIUM <b>K</b></div>
 <div class="card">
   <h1>비밀번호 재설정 Reset Password</h1>
   <p class="sub">새 비밀번호(숫자 6자리)를 입력해주세요.<br>Enter a new 6-digit password.</p>
