@@ -11,6 +11,7 @@ const db = require('../lib/db');
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const { applyTierPricing, DEFAULT_TIER } = require('../lib/pricing');
 const { creditStatus, round2 } = require('../lib/staffCredit');
+const { pushNewOrder } = require('../lib/erpOrders');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -213,7 +214,10 @@ module.exports = async (req, res) => {
       client.release();
     }
 
-    return res.status(201).json({ order: rows[0], staffCredit });
+    // 2026-10-13 — 저장된 주문을 바로 ERP "신규주문알림"으로 보냄 (서버 간). 실패해도 고객 주문은 성공 —
+    // ERP의 "Site Order 주문 점검·재전송"으로 다시 보낼 수 있다 (같은 주문은 ERP가 중복 저장하지 않음).
+    const erp = await pushNewOrder(db.query, rows[0].id);
+    return res.status(201).json({ order: rows[0], staffCredit, erpSent: !!erp.ok });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'SERVER_ERROR' });

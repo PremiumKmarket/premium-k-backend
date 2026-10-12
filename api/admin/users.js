@@ -20,6 +20,7 @@ const { resolveAdmin } = require('../../lib/adminAuth');
 const { sendSms, toE164US } = require('../../lib/sms');
 const { normalizeTier, DEFAULT_TIER } = require('../../lib/pricing');
 const { fetchRoster, computePlan, loadUsersForPlan, normPhone, savePhoneToErp } = require('../../lib/erpStaff');
+const { computeSyncPlan, syncBatch, brief } = require('../../lib/erpOrders');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -45,7 +46,7 @@ async function handler(req, res) {
   const admin = await resolveAdmin(req);
   if (!admin) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근할 수 있습니다.' });
   // 바꾸는 요청(POST·DELETE)과 ERP 직원 명단(이름·번호)은 C-Level·Director(또는 Site Order 관리자)만
-  if ((req.method === 'POST' || req.method === 'DELETE' || req.query.action === 'erpStaffPreview') && !admin.canManage) {
+  if ((req.method === 'POST' || req.method === 'DELETE' || req.query.action === 'erpStaffPreview' || req.query.action === 'erpOrderSyncPreview') && !admin.canManage) {
     return res.status(403).json(NO_MANAGE);
   }
   // Site Order 관리자 계정(is_admin)은 관리자 지정 권한이 있는 사람(Site Order 관리자·ERP C-Level)만 바꿀 수 있다.
@@ -74,6 +75,16 @@ async function handler(req, res) {
     }
   }
 
+  // Site Order 주문 → ERP 신규주문알림: ERP에 아직 없는 주문 미리보기 (아무것도 바꾸지 않음)
+  if (req.method === 'GET' && req.query.action === 'erpOrderSyncPreview') {
+    try {
+      const plan = await computeSyncPlan(db.query);
+      return res.json({ liveFrom: plan.liveFrom, erpReady: plan.erpReady, counts: plan.counts, missing: plan.missing.slice(0, 100).map(brief) });
+    } catch (e) {
+      return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message });
+    }
+  }
+
   if (req.method === 'GET') {
     const { rows } = await db.query(
       `SELECT u.id, u.phone, u.email, u.company_name, u.address, u.rep_name, u.tier, u.approved, u.is_admin, u.created_at, u.approved_at,
@@ -90,6 +101,16 @@ async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { userId, approved, newPassword, tier, isAdmin, action, makeStaff } = req.body;
+
+    // Site Order 주문 → ERP 보내기 (ERP에 없는 것만, 한 번에 최대 10건, 오래된 것부터). 같은 주문은 ERP가 중복 저장하지 않음.
+    if (action === 'erpOrderSync') {
+      try {
+        const r = await syncBatch(db.query, 10, req.body.skip);
+        return res.json({ ok: true, ...r });
+      } catch (e) {
+        return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message });
+      }
+    }
 
     // 이미 연결된 직원 중 ERP에 번호가 없거나 다른 사람: Site Order 계정 번호를 ERP 직원 정보에 저장 (Site Order 쪽은 바꾸지 않음)
     if (action === 'erpStaffBackfillPhones') {
