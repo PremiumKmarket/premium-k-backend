@@ -16,7 +16,7 @@ const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 const { sendSms, toE164US } = require('../../lib/sms');
 const { normalizeTier, DEFAULT_TIER } = require('../../lib/pricing');
-const { fetchRoster, computePlan, loadUsersForPlan, normPhone } = require('../../lib/erpStaff');
+const { fetchRoster, computePlan, loadUsersForPlan, normPhone, savePhoneToErp } = require('../../lib/erpStaff');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -66,8 +66,23 @@ module.exports = async (req, res) => {
   if (req.method === 'POST') {
     const { userId, approved, newPassword, tier, isAdmin, action, makeStaff } = req.body;
 
+    // 이미 연결된 직원 중 ERP에 번호가 없거나 다른 사람: Site Order 계정 번호를 ERP 직원 정보에 저장 (Site Order 쪽은 바꾸지 않음)
+    if (action === 'erpStaffBackfillPhones') {
+      let roster;
+      try { roster = await fetchRoster(); }
+      catch (e) { return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message }); }
+      const { plan } = computePlan(roster.staff, await loadUsersForPlan(db.query));
+      const targets = plan.filter((p) => p.action === 'OK' && p.erpPhoneMissing);
+      const results = [];
+      for (const t of targets) {
+        const r = await savePhoneToErp(t.erpStaffId, t.accountPhone);
+        results.push({ name: t.name, ok: r.ok, reason: r.reason || null });
+      }
+      return res.json({ total: targets.length, saved: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok) });
+    }
+
     // ERP에 휴대폰 번호가 없거나(형식 오류·직원끼리 중복) 건너뛴 직원 1명을, 관리자가 번호를 직접 넣어 처리.
-    // ERP 직원 번호로 연결해 두므로 다음 불러오기부터는 "이미 연결됨"으로 나온다. ERP 데이터는 바꾸지 않는다.
+    // ERP 직원 번호로 연결해 두므로 다음 불러오기부터는 "이미 연결됨"으로 나온다. 처리 후 ERP 직원 정보에도 번호를 저장한다.
     if (action === 'erpStaffSetPhone') {
       const erpStaffId = String(req.body.erpStaffId || '');
       let phone = String(req.body.phone || '').replace(/[^0-9]/g, '');
@@ -108,7 +123,9 @@ module.exports = async (req, res) => {
           result = u.is_staff ? 'LINK' : 'CONVERT';
         }
         await client.query('COMMIT');
-        return res.json({ ok: true, result, phone });
+        // Site Order 계정 처리가 끝난 뒤 ERP 직원 정보에도 같은 번호 저장 (실패해도 계정은 그대로, 안내만)
+        const erp = await savePhoneToErp(erpStaffId, phone);
+        return res.json({ ok: true, result, phone, erpSaved: erp.ok, erpReason: erp.reason || null });
       } catch (e) {
         await client.query('ROLLBACK').catch(() => {});
         console.error('[erpStaffSetPhone]', e.message);
