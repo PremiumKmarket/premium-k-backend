@@ -10,6 +10,7 @@
 const db = require('../lib/db');
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const { applyTierPricing, DEFAULT_TIER } = require('../lib/pricing');
+const { creditStatus, round2 } = require('../lib/staffCredit');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -39,7 +40,8 @@ const MAX_QTY = 100000; // sanity ceiling — not a business rule, just guards a
 // 클라이언트가 보낸 { sku, qty, mode }만 신뢰하고, 가격은 전부 서버가
 // DB 카탈로그 + 고객 등급으로 다시 계산합니다. 알 수 없는 SKU나 잘못된
 // 수량이 있으면 주문 전체를 거부합니다 (부분 반영하지 않음).
-async function repriceItems(rawItems, tier) {
+// allowUnitForCarton: 직원 계정만 true — 박스 상품도 낱개로 주문 가능 (v8.2). 고객은 기존 화면 규칙대로 박스만.
+async function repriceItems(rawItems, tier, allowUnitForCarton = false) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return { error: 'EMPTY_ITEMS', message: 'No items in the order. 주문할 상품이 없습니다.' };
   }
@@ -57,6 +59,7 @@ async function repriceItems(rawItems, tier) {
 
   const unknownSkus = [];
   const invalidQty = [];
+  const invalidMode = [];
   const items = [];
   let total = 0;
 
@@ -68,6 +71,8 @@ async function repriceItems(rawItems, tier) {
     const row = productBySku.get(sku);
     if (!row) { unknownSkus.push(sku); continue; }
     if (!Number.isInteger(qty) || qty <= 0 || qty > MAX_QTY) { invalidQty.push(sku); continue; }
+    // 박스 가격이 있는 상품은 박스 단위로만 (직원 계정만 낱개 허용) — 화면 규칙을 서버에서도 동일하게 적용
+    if (mode === 'unit' && row.ctn_price !== null && !row.tbd && !allowUnitForCarton) { invalidMode.push(sku); continue; }
 
     const baseProduct = {
       price: row.price !== null ? Number(row.price) : null,
@@ -99,6 +104,9 @@ async function repriceItems(rawItems, tier) {
   if (unknownSkus.length) {
     return { error: 'UNKNOWN_SKU', message: `Unknown product(s): ${unknownSkus.join(', ')}. 알 수 없는 상품이 있습니다.`, detail: unknownSkus };
   }
+  if (invalidMode.length) {
+    return { error: 'BOX_ONLY', message: `Box(case) orders only for: ${invalidMode.join(', ')}. 박스(케이스) 단위로만 주문할 수 있는 상품입니다.`, detail: invalidMode };
+  }
   if (invalidQty.length) {
     return { error: 'INVALID_QTY', message: `Invalid quantity for: ${invalidQty.join(', ')}. 수량이 올바르지 않습니다.`, detail: invalidQty };
   }
@@ -114,11 +122,14 @@ module.exports = async (req, res) => {
     const user = await getUserFromToken(getBearerToken(req));
     if (!user) return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Login required. 로그인이 필요합니다.' });
     const { rows } = await db.query(
-      `SELECT id, invoice_number, customer_name, address, rep_name, delivery_method, payment_method, items, total, order_text, created_at
+      `SELECT id, invoice_number, customer_name, address, rep_name, delivery_method, payment_method, items, total, order_text, created_at,
+              staff_credit_applied, COALESCE(amount_due, total) AS amount_due
        FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
       [user.id]
     );
-    return res.json({ orders: rows });
+    // 직원 계정이면 이번 달 크레딧 현황을 함께 돌려줌 (화면 상단 표시용)
+    const staffCredit = user.is_staff ? await creditStatus(db, user.id) : null;
+    return res.json({ orders: rows, staffCredit });
   }
 
   if (req.method === 'PATCH') {
@@ -144,6 +155,7 @@ module.exports = async (req, res) => {
     const user = await getUserFromToken(getBearerToken(req));
     if (!user) return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Login required. 로그인이 필요합니다.' });
     if (!user.approved) return res.status(403).json({ error: 'NOT_APPROVED', message: 'Your account is not approved yet. 계정이 아직 승인되지 않았습니다.' });
+    if (user.must_change_password) return res.status(403).json({ error: 'MUST_CHANGE_PASSWORD', message: 'Please change your password first. 먼저 본인 비밀번호로 바꿔주세요.' });
 
     if (req.query.action === 'reserve') {
       const invoiceNumber = await nextInvoiceNumber();
@@ -155,30 +167,53 @@ module.exports = async (req, res) => {
       deliveryMethod, paymentMethod, items: rawItems, invoiceNumber,
     } = req.body;
 
-    const priced = await repriceItems(rawItems, user.tier || DEFAULT_TIER);
+    const priced = await repriceItems(rawItems, user.tier || DEFAULT_TIER, !!user.is_staff);
     if (priced.error) return res.status(400).json(priced);
 
     const finalInvoiceNumber = invoiceNumber || (await nextInvoiceNumber());
 
-    const { rows } = await db.query(
-      `INSERT INTO orders (user_id, phone, customer_name, address, rep_name, delivery_method, payment_method, items, total, order_text, invoice_number)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, invoice_number, items, total, created_at`,
-      [
-        user.id,
-        user.phone,
-        customerName || null,
-        address || null,
-        repName || null,
-        deliveryMethod || null,
-        paymentMethod || null,
-        JSON.stringify(priced.items),
-        priced.total,
-        null,
-        finalInvoiceNumber,
-      ]
-    );
+    // 직원 월 크레딧 — 같은 직원의 주문을 한 줄로 세워(사용자 행 잠금) 동시에 두 번 눌러도
+    // 이번 달 크레딧을 넘게 쓰지 못하게 합니다. 고객 주문은 크레딧 0, 결제할 금액 = 합계.
+    const client = await db.pool.connect();
+    let rows, staffCredit = null;
+    try {
+      await client.query('BEGIN');
+      let creditApplied = 0;
+      if (user.is_staff) {
+        await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [user.id]);
+        const before = await creditStatus(client, user.id);
+        creditApplied = round2(Math.min(Number(priced.total) || 0, before.remaining));
+      }
+      const amountDue = round2(Math.max(0, (Number(priced.total) || 0) - creditApplied));
+      ({ rows } = await client.query(
+        `INSERT INTO orders (user_id, phone, customer_name, address, rep_name, delivery_method, payment_method, items, total, order_text, invoice_number, staff_credit_applied, amount_due)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, invoice_number, items, total, created_at, staff_credit_applied, amount_due`,
+        [
+          user.id,
+          user.phone,
+          customerName || null,
+          address || null,
+          repName || null,
+          deliveryMethod || null,
+          paymentMethod || null,
+          JSON.stringify(priced.items),
+          priced.total,
+          null,
+          finalInvoiceNumber,
+          creditApplied,
+          amountDue,
+        ]
+      ));
+      if (user.is_staff) staffCredit = await creditStatus(client, user.id);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
 
-    return res.status(201).json({ order: rows[0] });
+    return res.status(201).json({ order: rows[0], staffCredit });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'SERVER_ERROR' });

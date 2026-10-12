@@ -34,6 +34,24 @@ input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:7px
 .newform .pfields label{font-size:11px;color:var(--text-2);font-weight:700;}
 .newform input{width:100%;}
 .count-badge{font-size:11px;color:var(--text-2);}
+/* v8.3 모바일 — 상품 한 줄을 [사진·버튼] 위, [입력칸 2열] 아래로 배치 */
+@media (max-width:640px){
+  body{padding:12px;}
+  .card{padding:12px;}
+  button{min-height:40px;padding:9px 14px;font-size:13.5px;}
+  button.small{min-height:38px;padding:8px 12px;font-size:13px;}
+  input,select,textarea{font-size:16px;}
+  .toolbar select,.toolbar input{flex:1 1 100%;min-width:0;}
+  .toolbar button{flex:1;}
+  .prow{display:grid;grid-template-columns:56px 1fr;gap:10px;}
+  .prow .pfields{grid-column:1 / -1;grid-row:2;grid-template-columns:1fr 1fr;}
+  .prow .pactions{grid-column:2;grid-row:1;flex-direction:row;justify-content:flex-end;align-self:center;}
+  .prow .msg{grid-column:1 / -1;}
+  .pfields label{font-size:11px;}
+  .pfields > div:has(.f-url), .pfields > div:has(.f-img), .pfields > div:has(.f-nameKo), .pfields > div:has(.f-nameEn){grid-column:1 / -1;}
+  .newform .pfields{grid-template-columns:1fr 1fr;}
+  #newForm > div:last-of-type button{min-width:110px;}
+}
 </style>
 </head>
 <body>

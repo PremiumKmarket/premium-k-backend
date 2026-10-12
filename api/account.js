@@ -21,6 +21,7 @@ const db = require('../lib/db');
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const { sendEmail } = require('../lib/emailjs');
 const { sendSms, toE164US } = require('../lib/sms');
+const { creditStatus } = require('../lib/staffCredit');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -42,8 +43,15 @@ async function handleProfile(req, res, user) {
     isAdmin: user.is_admin,
     createdAt: user.created_at,
     repName: user.rep_name,
+    isStaff: !!user.is_staff,
+    mustChangePassword: !!user.must_change_password,
+    // 직원 월 크레딧 (직원 계정만)
+    staffCredit: user.is_staff ? await creditStatus(db, user.id) : null,
   });
 }
+
+// 직원 초기 비밀번호 — 새 비밀번호로 다시 쓸 수 없음
+const STAFF_INITIAL_PASSWORD = '000000';
 
 async function handlePassword(req, res, user) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -53,8 +61,14 @@ async function handlePassword(req, res, user) {
   if (!newPassword || !/^[0-9]{6}$/.test(newPassword)) {
     return res.status(400).json({ error: 'INVALID_PASSWORD', message: 'New password must be 6 digits. 새 비밀번호는 숫자 6자리로 입력해주세요.' });
   }
+  if (newPassword === STAFF_INITIAL_PASSWORD || newPassword === currentPassword) {
+    return res.status(400).json({ error: 'WEAK_PASSWORD', message: 'Please choose a different password (not 000000 or your current one). 000000이나 지금 비밀번호와 다른 번호로 정해주세요.' });
+  }
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, user.id]);
+  // 비밀번호를 바꾸면 첫 로그인 변경 표시를 끄고, 지금 이 기기를 뺀 다른 로그인은 모두 끊습니다
+  // (초기 비밀번호로 누군가 먼저 들어와 있던 경우까지 차단).
+  await db.query('UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2', [passwordHash, user.id]);
+  await db.query('DELETE FROM sessions WHERE user_id = $1 AND token <> $2', [user.id, getBearerToken(req) || '']);
   return res.json({ message: 'Password changed. 비밀번호가 변경되었습니다.' });
 }
 

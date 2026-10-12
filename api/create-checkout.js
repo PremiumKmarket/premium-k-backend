@@ -112,13 +112,17 @@ module.exports = async (req, res) => {
     // 금액/주문번호는 요청에서 절대 받지 않고, 이미 서버가 가격을 매겨 저장해둔
     // 주문 레코드에서만 읽습니다. 본인 소유 주문인지도 확인합니다.
     const { rows } = await db.query(
-      `SELECT id, invoice_number, total, customer_name FROM orders WHERE id = $1 AND user_id = $2`,
+      `SELECT id, invoice_number, total, amount_due, staff_credit_applied, customer_name FROM orders WHERE id = $1 AND user_id = $2`,
       [orderId, user.id]
     );
     const order = rows[0];
     if (!order) return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'Order not found. 주문을 찾을 수 없습니다.' });
 
-    const numericAmount = Number(order.total);
+    // 결제할 금액 = 합계 − 직원 크레딧 (예전 주문은 amount_due가 없으므로 합계 그대로)
+    const numericAmount = Number(order.amount_due !== null && order.amount_due !== undefined ? order.amount_due : order.total);
+    if (Number(order.staff_credit_applied) > 0 && numericAmount <= 0) {
+      return res.status(400).json({ error: 'NO_PAYMENT_DUE', message: 'Fully covered by staff credit — nothing to pay. 직원 크레딧으로 전액 처리되어 결제할 금액이 없습니다.' });
+    }
     if (!numericAmount || numericAmount <= 0) {
       return res.status(400).json({ error: 'INVALID_AMOUNT', message: 'This order has no payable total (all items may be price-inquiry). 이 주문은 결제할 금액이 없습니다 (전부 가격문의 상품일 수 있음).' });
     }

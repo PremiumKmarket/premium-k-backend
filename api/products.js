@@ -40,7 +40,8 @@ module.exports = async (req, res) => {
   try {
     const token = getBearerToken(req);
     const user = await getUserFromToken(token);
-    const canSeePrices = !!(user && user.approved);
+    // 직원 초기 비밀번호 상태(must_change_password)에서는 비밀번호를 바꾸기 전까지 가격을 숨깁니다.
+    const canSeePrices = !!(user && user.approved && !user.must_change_password);
 
     const deviceId = req.query.deviceId || null;
     if (deviceId || user) {
@@ -73,6 +74,7 @@ module.exports = async (req, res) => {
       pricesVisible: canSeePrices,
       approved: user ? user.approved : null,
       tier: user ? (user.tier || DEFAULT_TIER) : null,
+      mustChangePassword: user ? !!user.must_change_password : null,
     });
   } catch (err) {
     console.error(err);

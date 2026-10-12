@@ -36,6 +36,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     const { rows } = await db.query(
       `SELECT u.id, u.phone, u.email, u.company_name, u.address, u.rep_name, u.tier, u.approved, u.is_admin, u.created_at, u.approved_at,
+              u.is_staff, u.must_change_password,
               la.last_seen
        FROM users u
        LEFT JOIN (
@@ -55,7 +56,8 @@ module.exports = async (req, res) => {
       }
       const passwordHash = await bcrypt.hash(newPassword, 10);
       const { rows } = await db.query(
-        'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, phone',
+        // 관리자가 직원 비밀번호를 재설정하면, 그 직원은 다음 로그인 때 다시 본인 비밀번호로 바꾸게 함
+        'UPDATE users SET password_hash = $1, must_change_password = (must_change_password OR is_staff) WHERE id = $2 RETURNING id, phone',
         [passwordHash, userId]
       );
       if (!rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });

@@ -45,7 +45,12 @@ module.exports = async (req, res) => {
       isAdmin: user.is_admin,
       createdAt: user.created_at,
       repName: user.rep_name,
-      message: user.approved ? 'Logged in. 로그인되었습니다.' : 'Logged in. Prices will be visible once an admin approves your account. 다만 아직 관리자 승인 전이라 가격은 승인 후에 보입니다.',
+      isStaff: !!user.is_staff,
+      // 직원 계정은 첫 로그인(초기 비밀번호) 후 본인 비밀번호로 바꿔야 가격·주문이 열립니다.
+      mustChangePassword: !!user.must_change_password,
+      message: user.must_change_password
+        ? 'Please set your own 6-digit password to continue. 계속하려면 본인 비밀번호 6자리로 바꿔주세요.'
+        : (user.approved ? 'Logged in. 로그인되었습니다.' : 'Logged in. Prices will be visible once an admin approves your account. 다만 아직 관리자 승인 전이라 가격은 승인 후에 보입니다.'),
     });
   } catch (err) {
     console.error(err);
