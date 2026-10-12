@@ -16,7 +16,7 @@ const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 const { sendSms, toE164US } = require('../../lib/sms');
 const { normalizeTier, DEFAULT_TIER } = require('../../lib/pricing');
-const { fetchRoster, computePlan, loadUsersForPlan } = require('../../lib/erpStaff');
+const { fetchRoster, computePlan, loadUsersForPlan, normPhone } = require('../../lib/erpStaff');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -65,6 +65,56 @@ module.exports = async (req, res) => {
 
   if (req.method === 'POST') {
     const { userId, approved, newPassword, tier, isAdmin, action, makeStaff } = req.body;
+
+    // ERP에 휴대폰 번호가 없거나(형식 오류·직원끼리 중복) 건너뛴 직원 1명을, 관리자가 번호를 직접 넣어 처리.
+    // ERP 직원 번호로 연결해 두므로 다음 불러오기부터는 "이미 연결됨"으로 나온다. ERP 데이터는 바꾸지 않는다.
+    if (action === 'erpStaffSetPhone') {
+      const erpStaffId = String(req.body.erpStaffId || '');
+      let phone = String(req.body.phone || '').replace(/[^0-9]/g, '');
+      if (phone.length === 11 && phone[0] === '1') phone = phone.slice(1);
+      if (!/^[0-9]{10}$/.test(phone)) return res.status(400).json({ error: 'INVALID_PHONE', message: '휴대폰 번호 10자리를 넣어주세요.' });
+      let roster;
+      try { roster = await fetchRoster(); }
+      catch (e) { return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message }); }
+      const st = roster.staff.find((x) => String(x.erpStaffId) === erpStaffId);
+      if (!st) return res.status(404).json({ error: 'NOT_IN_ROSTER', message: 'ERP 재직 직원 명단에 없는 직원입니다.' });
+      const other = roster.staff.find((x) => String(x.erpStaffId) !== erpStaffId && normPhone(x.phone) === phone);
+      if (other) return res.status(409).json({ error: 'PHONE_OF_OTHER_STAFF', message: `ERP에서 다른 직원(${String(other.name || '').trim()})의 번호와 같습니다.` });
+      const name = String(st.name || '').trim();
+      const client = await db.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const linked = await client.query('SELECT id FROM users WHERE erp_staff_id = $1 FOR UPDATE', [erpStaffId]);
+        if (linked.rows[0]) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'ALREADY_LINKED', message: '이미 이 ERP 직원과 연결된 계정이 있습니다.' }); }
+        const ex = await client.query('SELECT id, is_admin, is_staff, erp_staff_id FROM users WHERE phone = $1 FOR UPDATE', [phone]);
+        const u = ex.rows[0];
+        let result;
+        if (!u) {
+          const hash = await bcrypt.hash('000000', 10);
+          await client.query(
+            `INSERT INTO users (phone, password_hash, company_name, rep_name, approved, approved_at, tier, is_staff, must_change_password, erp_staff_id)
+             VALUES ($1, $2, $3, $4, TRUE, now(), 'tier1', TRUE, TRUE, $5)`,
+            [phone, hash, 'Premium K Staff · ' + name, name, erpStaffId]);
+          result = 'CREATE';
+        } else if (u.is_admin) {
+          await client.query('ROLLBACK'); return res.status(409).json({ error: 'ADMIN_ACCOUNT', message: '관리자 계정 번호입니다. 회원 상세에서 직접 직원으로 지정해주세요.' });
+        } else if (u.erp_staff_id) {
+          await client.query('ROLLBACK'); return res.status(409).json({ error: 'OTHER_ERP', message: '다른 ERP 직원과 연결된 번호입니다.' });
+        } else {
+          await client.query(
+            `UPDATE users SET is_staff = TRUE, erp_staff_id = $2, tier = 'tier1', approved = TRUE, approved_at = COALESCE(approved_at, now()),
+                    company_name = COALESCE(NULLIF(btrim(company_name), ''), $3), rep_name = COALESCE(NULLIF(btrim(rep_name), ''), $4)
+             WHERE id = $1`, [u.id, erpStaffId, 'Premium K Staff · ' + name, name]);
+          result = u.is_staff ? 'LINK' : 'CONVERT';
+        }
+        await client.query('COMMIT');
+        return res.json({ ok: true, result, phone });
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('[erpStaffSetPhone]', e.message);
+        return res.status(500).json({ error: 'SERVER_ERROR', message: '처리 중 오류가 나서 취소했습니다.' });
+      } finally { client.release(); }
+    }
 
     // ERP 직원 명단 반영. 미리보기에서 본 건수(expected)와 지금 다시 계산한 건수가 하나라도 다르면
     // 아무것도 바꾸지 않고 멈춤 (그 사이 ERP나 회원 정보가 바뀐 경우). 한 트랜잭션으로 전부 반영 또는 전부 취소.
