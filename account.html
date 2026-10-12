@@ -302,6 +302,9 @@ async function deleteAddress(id){
   loadAddresses();
 }
 
+// v2.1 — 수령 방법 내부 값 대신 알아보기 쉬운 이름 (Site Order v8.4 픽업 추가)
+const FULFILL_LABEL = { delivery: 'Delivery 딜리버리', shipping: 'Shipping 택배', pickup_warehouse: 'Warehouse pickup 창고 픽업', pickup_store: 'Store pickup 매장 픽업 (LA #1)' };
+const escMeta = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 async function loadOrders(){
   const data = await api('/orders');
   const el = document.getElementById('orderList');
@@ -313,7 +316,7 @@ async function loadOrders(){
         <span class="meta">${new Date(o.created_at).toLocaleString('ko-KR')}</span>
       </div>
       <div class="meta">Invoice No. 인보이스 번호: ${o.invoice_number || '—'}</div>
-      <div class="meta">Fulfillment 수령방법 ${o.delivery_method || '—'} · Payment 결제방법 ${o.payment_method || '—'}</div>
+      <div class="meta">Fulfillment 수령방법 ${escMeta(FULFILL_LABEL[o.delivery_method] || o.delivery_method || '—')} · Payment 결제방법 ${escMeta(o.payment_method || '—')}</div>
       <a class="linklike" onclick="toggleOrderDetail(${idx})">View details 상세보기</a>
       <pre id="orderDetail${idx}">${(o.order_text || '').replace(/</g,'&lt;')}</pre>
     </div>
