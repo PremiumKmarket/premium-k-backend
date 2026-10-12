@@ -2,206 +2,320 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0C1630">
 <title>Premium K · 관리자</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F4F5F7;margin:0;padding:16px;color:#1C2333;}
-h1{font-size:18px;color:#0B1B33;}
-.card{background:#fff;border:1px solid #E2E5EA;border-radius:12px;padding:14px;margin-bottom:12px;}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-th,td{text-align:left;padding:8px;border-bottom:1px solid #E2E5EA;}
-button{background:#0B1B33;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;}
-button.danger{background:#B3261E;}
-input{border:1px solid #E2E5EA;border-radius:8px;padding:8px;font-size:16px;width:100%;margin-bottom:8px;box-sizing:border-box;}
-.pill{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;}
-.pill.approved{background:#E7F6EC;color:#1E7A46;}
-.pill.pending{background:#FFF3E9;color:#8A4B00;}
-#loginBox{max-width:320px;margin:60px auto;}
-.pager{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:10px;}
-.pager button{padding:5px 12px;font-size:12px;}
-.pager button:disabled{opacity:0.35;cursor:default;}
-.pager span{font-size:12px;color:#5B6272;}
-.chart-wrap{display:flex;align-items:flex-end;gap:6px;height:160px;padding-top:20px;overflow-x:auto;}
-.chart-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:36px;}
-.chart-bar{width:100%;max-width:28px;background:linear-gradient(180deg,#3E5C99,#0B1B33);border-radius:4px 4px 0 0;position:relative;}
-.chart-bar-value{font-size:10px;color:#0B1B33;margin-bottom:3px;white-space:nowrap;}
-.chart-bar-label{font-size:10px;color:#5B6272;margin-top:6px;white-space:nowrap;}
-.pill.dormant60{background:#FCE8E6;color:#9B2C1F;}
-.pill.dormant30{background:#FFF3E9;color:#8A4B00;}
-.pill.admin{background:#E6EEFC;color:#1D4ED8;}
-.pill.normal{background:#F0F1F3;color:#5B6272;}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(11,27,51,.45);z-index:500;align-items:center;justify-content:center;padding:16px;}
-.modal-overlay.open{display:flex;}
-.modal-box{background:#fff;border-radius:12px;padding:16px;max-width:420px;width:100%;max-height:75vh;overflow:auto;}
-.viewer-preview{font-size:12px;color:#5B6272;}
-.viewer-more-btn{margin-left:6px;padding:2px 8px;font-size:11px;}
-.pill.staff{background:#FBF1DA;color:#7A5A12;margin-left:4px;}
-.pill.mustpw{background:#FCE8E6;color:#9B2C1F;margin-left:4px;}
-.pill{white-space:nowrap;display:inline-block;}
-button{white-space:nowrap;}
-.card{overflow-x:auto;}
-/* v8.3 모바일 — 표를 카드로 바꿔서 가로로 밀리지 않게, 누르는 곳은 40px 이상 */
-@media (max-width:760px){
-  body{padding:12px;}
-  h1{font-size:17px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
-  h1 button.danger{float:none !important;}
-  .card{padding:12px;}
-  .card > a > button, .card > button{width:100%;margin-top:8px;}
-  button{min-height:40px;padding:9px 14px;font-size:13.5px;}
-  .viewer-more-btn{min-height:34px;padding:6px 10px;font-size:12px;margin:4px 0 0;}
-  input, select{font-size:16px;}
-  select{padding:8px;border:1px solid #E2E5EA;border-radius:8px;background:#fff;min-height:40px;max-width:100%;}
-  table.rt thead{display:none;}
-  table.rt, table.rt tbody, table.rt tr, table.rt td{display:block;width:100%;box-sizing:border-box;}
-  table.rt tr{border:1px solid #E2E5EA;border-radius:10px;padding:6px 10px;margin-bottom:10px;background:#fff;}
-  .card{overflow-x:visible;}
-  table.rt td{overflow-wrap:anywhere;border:none;padding:6px 0;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center;text-align:right;min-height:28px;}
-  table.rt td::before{content:attr(data-label);font-weight:700;color:#5B6272;font-size:12px;text-align:left;flex-shrink:0;max-width:42%;margin-right:auto;}
-  table.rt td.nolabel::before{display:none;}
-  table.rt td.nolabel{justify-content:center;text-align:center;}
-  table.rt td.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start;white-space:normal !important;border-top:1px solid #EEF0F3;margin-top:4px;padding-top:10px;}
-  table.rt td.actions::before{display:none;}
-  table.rt td.actions button{flex:1 1 auto;margin-left:0 !important;}
-  table.rt td button{min-height:36px;}
-  table.rt tr:last-child{margin-bottom:0;}
-  #repSalesTable tr:last-child{border:2px solid #0B1B33;}
-  .pager{flex-wrap:wrap;}
-  .pager button{min-height:40px;padding:8px 16px;font-size:13px;}
-  .modal-box{max-height:85vh;}
-  .modal-box td{font-size:12.5px;}
-  .chart-bar-value,.chart-bar-label{font-size:11px;}
+/* 관리자 화면 v2.0 (2026-10-12) — 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
+:root{
+  --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --gold-soft:#E8D49A; --ink:#1C2333; --ink2:#5B6272; --ink3:#8A90A0;
+  --bg:#F3F4F7; --card:#fff; --line:#E3E6EC; --green:#1E7A46; --green-bg:#E7F6EC; --amber:#8A4B00; --amber-bg:#FFF3E2;
+  --red:#B3261E; --red-bg:#FCE8E6; --blue:#1D4ED8; --blue-bg:#E6EEFC;
 }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit;font-size:16px}
+.hidden{display:none !important}
+
+/* 로그인 */
+#loginBox{max-width:360px;margin:0 auto;padding:64px 20px}
+#loginBox .brand{font-weight:800;font-size:26px;letter-spacing:.5px;color:var(--navy)}
+#loginBox .brand b{color:var(--gold)}
+#loginBox .sub{color:var(--ink2);margin:4px 0 24px}
+.field{display:block;width:100%;border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;margin-bottom:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;padding:13px 16px;font-weight:700;min-height:48px}
+.btn.primary{background:var(--navy);color:#fff}
+.btn.gold{background:var(--gold);color:var(--navy)}
+.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line)}
+.btn.danger{background:#fff;color:var(--red);border:1px solid #F1C4C0}
+.btn.block{width:100%}
+.err{color:var(--red);font-size:14px;margin-top:8px;min-height:20px}
+
+/* 상단 */
+.top{position:sticky;top:0;z-index:20;background:var(--navy);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px}
+.summary{background:var(--navy);padding:0 14px 12px}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.top .brand{font-weight:800;font-size:18px;letter-spacing:.4px}
+.top .brand b{color:var(--gold)}
+.top .brand small{font-weight:600;font-size:12px;color:#9FB0D4;margin-left:6px}
+.top .logout{background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700;min-height:38px}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;max-width:760px;margin:0 auto}
+.tile{background:var(--navy2);border-radius:12px;padding:8px 8px 9px;min-height:58px;border:1px solid rgba(255,255,255,.06);text-align:left;color:#fff}
+.tile .k{font-size:11.5px;color:#B9C4DE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v{font-size:19px;font-weight:800;margin-top:1px;letter-spacing:-.4px;white-space:nowrap}
+.tile .v.gold{color:var(--gold-soft)}
+.tile.alert{background:#3A2A0C;border-color:rgba(201,164,86,.5)}
+.tile.alert .v{color:#FFD58A}
+
+main{padding:14px 14px calc(90px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+h2.sec{font-size:17px;margin:18px 4px 10px;color:var(--navy);display:flex;align-items:center;justify-content:space-between}
+h2.sec:first-child{margin-top:4px}
+h2.sec small{font-size:13px;color:var(--ink2);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.card + .card{margin-top:12px}
+.pad{padding:14px}
+
+/* 검색·필터 */
+.search{position:relative;margin-bottom:10px}
+.search input{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px 12px 40px;background:#fff}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--ink3)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;min-height:38px}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.chip .n{opacity:.75;margin-left:4px;font-weight:600}
+
+/* 목록 줄 */
+.row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-top:1px solid var(--line);width:100%;background:none;border-left:none;border-right:none;border-bottom:none;text-align:left;color:inherit}
+.row:first-child{border-top:none}
+button.row:active{background:#F6F7FA}
+.row .main{flex:1;min-width:0}
+.row .t{font-weight:700;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:13px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .r{text-align:right;flex-shrink:0}
+.row .amt{font-weight:800;font-size:15.5px}
+.row .chev{color:var(--ink3);flex-shrink:0}
+.row .rank{width:26px;height:26px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--ink2);flex-shrink:0}
+.row .rank.top{background:var(--gold);color:var(--navy)}
+.badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.when{font-size:12.5px;color:var(--ink3);align-self:center;margin-left:2px}
+.b{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b.pending{background:var(--amber-bg);color:var(--amber)}
+.b.ok{background:var(--green-bg);color:var(--green)}
+.b.t1{background:#ECEFF4;color:#3E4A5E}
+.b.t2{background:#FBF1DA;color:#7A5A12}
+.b.t3{background:#F1F2F4;color:#6B7280}
+.b.staff{background:#E9E4FB;color:#4C3A9E}
+.b.admin{background:var(--blue-bg);color:var(--blue)}
+.b.red{background:var(--red-bg);color:var(--red)}
+.empty{padding:28px 16px;text-align:center;color:var(--ink2);font-size:14px}
+.more{display:block;width:100%;border:none;border-top:1px solid var(--line);background:#FAFBFC;color:var(--navy);font-weight:700;padding:14px;min-height:48px}
+
+/* 매출 */
+.monthsel{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.monthsel select{flex:1;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;min-height:46px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line)}
+.kpi{background:#fff;padding:12px}
+.kpi .k{font-size:12px;color:var(--ink2)}
+.kpi .v{font-size:18px;font-weight:800;margin-top:2px}
+.bars{padding:6px 14px 12px}
+.bar{display:grid;grid-template-columns:56px 1fr auto;align-items:center;gap:10px;padding:6px 0;font-size:13px}
+.bar .m{color:var(--ink2);font-weight:600}
+.bar .track{height:12px;background:var(--bg);border-radius:6px;overflow:hidden}
+.bar .fill{height:100%;background:linear-gradient(90deg,var(--navy2),var(--navy));border-radius:6px}
+.bar.cur .fill{background:linear-gradient(90deg,#B08A3E,var(--gold))}
+.bar .val{font-weight:700;min-width:70px;text-align:right}
+.exports{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.exports .btn{font-size:14px;padding:11px 10px}
+
+/* 하단 탭 */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+.tab{border:none;background:none;padding:8px 0 9px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink3);font-size:12px;font-weight:700;min-height:58px;position:relative}
+.tab svg{width:23px;height:23px}
+.tab.on{color:var(--navy)}
+.tab.on::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--gold)}
+.tab .dot{position:absolute;top:4px;left:calc(50% + 8px);background:#D64545;color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:1px 6px;min-width:18px}
+
+/* 상세 시트 */
+.sheet-bg{position:fixed;inset:0;background:rgba(12,22,48,.45);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet-bg.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;background:#fff;border-radius:20px 20px 0 0;max-height:88vh;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease;padding:8px 18px calc(18px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+.sheet.open{transform:none}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:#D5D9E0;margin:4px auto 10px}
+.sheet h3{margin:0;font-size:20px;color:var(--navy)}
+.sheet .phone{color:var(--ink2);margin-top:2px;font-size:15px}
+.sheet .phone a{color:var(--navy);font-weight:700;text-decoration:none;display:inline-block;padding:9px 0;font-size:16px}
+.info{margin:14px 0;border:1px solid var(--line);border-radius:14px}
+.info div{display:flex;gap:12px;padding:10px 12px;border-top:1px solid var(--line);font-size:14px}
+.info div:first-child{border-top:none}
+.info dt{color:var(--ink2);width:82px;flex-shrink:0}
+.info dd{margin:0;flex:1;overflow-wrap:anywhere}
+.label{font-size:13px;font-weight:700;color:var(--ink2);margin:16px 2px 8px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 4px;font-weight:700;font-size:14px;min-height:46px;color:var(--ink2)}
+.seg button.on{border:2px solid var(--navy);color:var(--navy);background:#F5F7FC}
+.acts{display:grid;gap:8px;margin-top:12px}
+.acts2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:12.5px;color:var(--ink2);margin-top:6px}
+.toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:11px 16px;border-radius:12px;font-size:14px;font-weight:700;z-index:60;opacity:0;transition:all .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+
+@media (min-width:761px){
+  main{padding-top:20px}
+  .top-row{max-width:760px;margin:0 auto}
+  .tile .v{font-size:22px}
+}
+@media (max-width:370px){ .tile .v{font-size:17px} .tile .k{font-size:11.5px} }
 </style>
 </head>
 <body>
 
-<div id="loginBox" class="card">
-  <h1>관리자 로그인</h1>
-  <input id="phone" placeholder="휴대폰 번호">
-  <input id="password" type="password" maxlength="6" placeholder="비밀번호 6자리">
-  <button onclick="adminLogin()" style="width:100%;padding:10px;">로그인</button>
-  <div id="loginErr" style="color:#B3261E;font-size:12px;margin-top:8px;"></div>
+<div id="loginBox">
+  <div class="brand">PREMIUM <b>K</b></div>
+  <div class="sub">관리자 로그인</div>
+  <input id="phone" class="field" placeholder="휴대폰 번호" inputmode="tel" autocomplete="username">
+  <input id="password" class="field" type="password" maxlength="6" inputmode="numeric" placeholder="비밀번호 6자리" autocomplete="current-password" onkeydown="if(event.key==='Enter')adminLogin()">
+  <button class="btn primary block" onclick="adminLogin()">로그인</button>
+  <div id="loginErr" class="err"></div>
 </div>
 
-<div id="dashboard" style="display:none;">
-  <h1>Premium K 관리자 <button class="danger" style="float:right;font-size:11px;padding:5px 10px;" onclick="adminLogout()">로그아웃</button></h1>
-  <div class="card">
-    <a href="catalog.html" style="text-decoration:none;"><button>Manage Products 상품 관리 (가격/사진/추가) →</button></a>
-    <button onclick="exportPriceListCsv()" style="margin-top:8px;">상품 가격 CSV 내보내기 (Platinum/Gold/Silver)</button>
+<div id="dashboard" class="hidden">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.0</small></div>
+      <button class="logout" onclick="adminLogout()">로그아웃</button>
+    </div>
+  </header>
+  <div class="summary">
+    <div class="tiles">
+      <button class="tile alert" id="tilePending" onclick="goPending()"><div class="k">승인 대기</div><div class="v" id="kPending">–</div></button>
+      <button class="tile" onclick="showTab('members');setFilter('all')"><div class="k">전체 회원</div><div class="v" id="kMembers">–</div></button>
+      <button class="tile" onclick="showTab('sales')"><div class="k" id="kSalesLabel">이번 달 매출</div><div class="v gold" id="kSales">–</div></button>
+      <button class="tile" onclick="showTab('sales')"><div class="k">이번 달 주문</div><div class="v" id="kOrders">–</div></button>
+    </div>
   </div>
 
-  <div class="card">
-    <h2 style="font-size:14px;">회원 승인 관리</h2>
-    <table id="userTable" class="rt"><thead><tr><th>전화번호</th><th>이메일</th><th>상호명</th><th>주소</th><th>담당영업사원</th><th>등급</th><th>관리자</th><th>상태</th><th>가입일</th><th>최종 방문일</th><th></th></tr></thead><tbody></tbody></table>
-    <div class="pager" id="userPager"></div>
-    <button onclick="exportUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
-  </div>
+  <main>
+    <!-- 회원 -->
+    <section id="tab-members">
+      <div class="search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="memberSearch" placeholder="상호명·전화번호·이메일 검색" oninput="memberShown=PAGE;renderMembers()">
+      </div>
+      <div class="chips" id="memberChips"></div>
+      <div class="card" id="memberList"></div>
+    </section>
 
-  <div class="card">
-    <h2 style="font-size:14px;">고객별 행동 조회</h2>
-    <input id="insightPhone" placeholder="전화번호로 검색 (숫자만)">
-    <button onclick="loadInsights()">조회</button>
-    <table id="insightTable" class="rt" style="margin-top:10px;"><thead><tr><th>시각</th><th>행동</th><th>상품</th><th>상세</th></tr></thead><tbody></tbody></table>
-  </div>
+    <!-- 매출 -->
+    <section id="tab-sales" class="hidden">
+      <h2 class="sec">영업사원별 매출 <small>인센티브 5%</small></h2>
+      <div class="monthsel"><select id="repSalesMonth" onchange="renderRepSales()"></select></div>
+      <div class="card">
+        <div class="kpis"><div class="kpi"><div class="k">총 매출</div><div class="v" id="mTotal">–</div></div><div class="kpi"><div class="k">주문</div><div class="v" id="mCount">–</div></div><div class="kpi"><div class="k">인센티브</div><div class="v" id="mInc">–</div></div></div>
+        <div id="repList"></div>
+      </div>
+      <h2 class="sec">월별 매출 <small>최근 1년</small></h2>
+      <div class="card"><div class="bars" id="revBars"></div></div>
+      <h2 class="sec">고객별 총 구매액</h2>
+      <div class="card" id="rankList"></div>
+      <h2 class="sec">내보내기 (CSV)</h2>
+      <div class="exports">
+        <button class="btn ghost" onclick="exportMonthlyRevenueCsv()">월별 매출</button>
+        <button class="btn ghost" onclick="exportRankingCsv()">고객 구매액</button>
+      </div>
+    </section>
 
-  <div class="card">
-    <h2 style="font-size:14px;">최근 30일 인기 상품 (조회/장바구니 기준)</h2>
-    <table id="topSkuTable" class="rt"><thead><tr><th>상품명</th><th>행동</th><th>횟수</th><th>조회 고객</th></tr></thead><tbody></tbody></table>
-    <div class="pager" id="topSkuPager"></div>
-  </div>
+    <!-- 고객 -->
+    <section id="tab-customers" class="hidden">
+      <div class="chips" id="custChips">
+        <button class="chip on" data-v="active" onclick="setCustView('active')">최근 활발한 고객</button>
+        <button class="chip" data-v="dormant" onclick="setCustView('dormant')">휴면 고객</button>
+        <button class="chip" data-v="top" onclick="setCustView('top')">인기 상품</button>
+        <button class="chip" data-v="lookup" onclick="setCustView('lookup')">고객 행동 조회</button>
+      </div>
+      <div id="custBody"></div>
+    </section>
 
-  <div class="card">
-    <h2 style="font-size:14px;">최근 30일 활발한 고객 (최근 접속순)</h2>
-    <table id="activeUserTable" class="rt"><thead><tr><th>전화번호</th><th>활동순위</th><th>방문횟수</th><th>마지막 방문 체류시간</th><th>평균 체류시간</th><th>마지막 접속</th></tr></thead><tbody></tbody></table>
-    <div class="pager" id="activeUserPager"></div>
-    <button onclick="exportActiveUsersCsv()" style="margin-top:10px;">CSV 내보내기</button>
-  </div>
+    <!-- 상품 -->
+    <section id="tab-products" class="hidden">
+      <h2 class="sec">상품</h2>
+      <div class="card">
+        <a class="row" href="catalog.html" style="text-decoration:none">
+          <div class="main"><div class="t">상품 관리</div><div class="s">가격 · 사진 · 새 상품 추가</div></div>
+          <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg>
+        </a>
+        <button class="row" onclick="exportPriceListCsv()">
+          <div class="main"><div class="t">전체 도매가격 CSV</div><div class="s">플래티늄 · 골드 · 실버 가격표 내려받기</div></div>
+          <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+        </button>
+        <button class="row" onclick="exportUsersCsv()">
+          <div class="main"><div class="t">회원 목록 CSV</div><div class="s">전체 회원 정보 내려받기</div></div>
+          <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+        </button>
+      </div>
+    </section>
+  </main>
 
-  <div class="card">
-    <h2 style="font-size:14px;">영업사원별 매출 / 인센티브 (5%)</h2>
-    <select id="repSalesMonth" onchange="renderRepSalesTable()" style="margin-bottom:8px;"></select>
-    <table id="repSalesTable" class="rt"><thead><tr><th>영업사원</th><th>주문건수</th><th>총 매출</th><th>인센티브 (5%)</th></tr></thead><tbody></tbody></table>
-  </div>
-
-  <div class="card">
-    <h2 style="font-size:14px;">월별 매출 추이 (최근 12개월)</h2>
-    <div id="revenueChart" class="chart-wrap"></div>
-    <button onclick="exportMonthlyRevenueCsv()" style="margin-top:10px;">CSV 내보내기</button>
-  </div>
-
-  <div class="card">
-    <h2 style="font-size:14px;">고객별 총 구매액 랭킹</h2>
-    <table id="rankingTable" class="rt"><thead><tr><th>순위</th><th>전화번호</th><th>상호명</th><th>주문건수</th><th>총 구매액</th></tr></thead><tbody></tbody></table>
-    <button onclick="exportRankingCsv()" style="margin-top:10px;">CSV 내보내기</button>
-  </div>
-
-  <div class="card">
-    <h2 style="font-size:14px;">휴면 고객 (30일 이상 미접속)</h2>
-    <table id="dormantTable" class="rt"><thead><tr><th>전화번호</th><th>상호명</th><th>가입일</th><th>마지막 접속</th><th>상태</th></tr></thead><tbody></tbody></table>
-    <button onclick="exportDormantCsv()" style="margin-top:10px;">CSV 내보내기</button>
-  </div>
+  <nav class="tabs">
+    <button class="tab on" data-tab="members" onclick="showTab('members')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.7c2 .8 3.2 2.6 3.5 5.3"/></svg>회원<span class="dot hidden" id="tabDot"></span></button>
+    <button class="tab" data-tab="sales" onclick="showTab('sales')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>매출</button>
+    <button class="tab" data-tab="customers" onclick="showTab('customers')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>고객</button>
+    <button class="tab" data-tab="products" onclick="showTab('products')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="m3 7.5 9 4.5 9-4.5M12 12v9"/></svg>상품</button>
+  </nav>
 </div>
 
-<div id="viewersModal" class="modal-overlay">
-  <div class="modal-box">
-    <h3 id="viewersModalTitle" style="margin:0 0 10px;font-size:14px;"></h3>
-    <table><thead><tr><th>전화번호</th><th>최근 상호작용</th></tr></thead><tbody id="viewersModalBody"></tbody></table>
-    <button onclick="closeViewersModal()" style="margin-top:10px;width:100%;">닫기</button>
-  </div>
-</div>
+<div class="sheet-bg" id="sheetBg" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="toast" id="toast"></div>
 
 <script>
-// ⚠️ 이 값을 실제 백엔드 주소로 바꿔주세요 (tronic_field_order.html의 BACKEND_API_URL과 동일해야 합니다)
 const API_BASE = 'https://premium-k-backend.vercel.app/api';
-
 let token = localStorage.getItem('pk_token');
 
-// 고객이 직접 입력하는 값(이메일/상호명/주소/영업사원명/SKU 등)을 화면에 그대로 꽂아 넣으면
-// 악성 스크립트가 실행될 수 있어(저장형 XSS), 화면에 표시하기 전에 반드시 이 함수로 이스케이프합니다.
+// 고객이 입력한 값은 화면에 넣기 전에 반드시 이스케이프 (저장형 XSS 방지)
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+const $ = id => document.getElementById(id);
+const money = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money0 = n => '$' + Math.round(Number(n || 0)).toLocaleString('en-US');
+const fmtPhone = p => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}` : (p || ''); };
+const fmtDate = d => d ? new Date(d).toLocaleDateString('ko-KR') : '—';
+const fmtDT = d => d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+function daysAgo(d) {
+  if (!d) return null;
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+}
+function ago(d) {
+  const n = daysAgo(d); if (n === null) return '방문 기록 없음';
+  return n <= 0 ? '오늘 방문' : n === 1 ? '어제 방문' : `${n}일 전 방문`;
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
 
 async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers||{}) };
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(API_BASE + path, { ...options, headers });
-  const data = await res.json().catch(()=>({}));
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
   return data;
 }
 
 async function adminLogin() {
-  const phone = document.getElementById('phone').value.trim();
-  const password = document.getElementById('password').value.trim();
+  const phone = $('phone').value.trim();
+  const password = $('password').value.trim();
+  $('loginErr').textContent = '';
   try {
-    const data = await api('/auth/login', { method:'POST', body: JSON.stringify({ phone, password }) });
-    if (!data.isAdmin) { document.getElementById('loginErr').textContent = '관리자 계정이 아닙니다.'; return; }
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ phone, password }) });
+    if (!data.isAdmin) { $('loginErr').textContent = '관리자 계정이 아닙니다.'; return; }
     token = data.token;
     localStorage.setItem('pk_token', token);
-    document.getElementById('loginBox').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-    loadUsers();
-    loadInsights();
-    resetInactivityTimer();
+    enterDashboard();
   } catch (e) {
-    document.getElementById('loginErr').textContent = e.message;
+    $('loginErr').textContent = e.message;
   }
 }
-
+function enterDashboard() {
+  $('loginBox').classList.add('hidden');
+  $('dashboard').classList.remove('hidden');
+  loadUsers().catch(() => { localStorage.removeItem('pk_token'); location.reload(); });
+  loadInsights().catch(e => console.error(e));
+  resetInactivityTimer();
+}
 function adminLogout() {
   token = null;
   localStorage.removeItem('pk_token');
-  document.getElementById('loginBox').style.display = 'block';
-  document.getElementById('dashboard').style.display = 'none';
-  document.getElementById('phone').value = '';
-  document.getElementById('password').value = '';
+  closeSheet();
+  $('loginBox').classList.remove('hidden');
+  $('dashboard').classList.add('hidden');
+  $('phone').value = ''; $('password').value = '';
 }
 
 // ===== 3분간 조작이 없으면 자동 로그아웃 =====
@@ -216,183 +330,260 @@ function resetInactivityTimer() {
     alert('3분간 조작이 없어 자동으로 로그아웃되었습니다.');
   }, INACTIVITY_LIMIT_MS);
 }
-['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(evt =>
-  document.addEventListener(evt, resetInactivityTimer, { passive: true })
-);
+['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(evt => document.addEventListener(evt, resetInactivityTimer, { passive: true }));
 
-const PAGE_SIZE = 10;
-const pageState = { user: 1, topSku: 1, activeUser: 1 };
-let allUsers = [], allTopSkus = [], allActiveUsers = [], allDormantCustomers = [], allCustomerRanking = [], monthlyRevenueData = [];
-let topSkuViewerMap = {}; // key: `${sku}|${event_type}` -> [{phone, lastInteracted}, ...] (최근 상호작용순 정렬됨)
-
-function renderPager(pagerId, dataLen, key, onChangeFn) {
-  const totalPages = Math.max(1, Math.ceil(dataLen / PAGE_SIZE));
-  if (pageState[key] > totalPages) pageState[key] = totalPages;
-  const cur = pageState[key];
-  document.getElementById(pagerId).innerHTML = `
-    <button ${cur<=1?'disabled':''} onclick="${onChangeFn}(${cur-1})">‹ 이전</button>
-    <span>${cur} / ${totalPages} (총 ${dataLen}개)</span>
-    <button ${cur>=totalPages?'disabled':''} onclick="${onChangeFn}(${cur+1})">다음 ›</button>
-  `;
+// ===== 탭 =====
+function showTab(name) {
+  ['members', 'sales', 'customers', 'products'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  window.scrollTo(0, 0);
 }
 
-function goUserPage(p){ pageState.user = p; renderUserTable(); }
-
+// ===== 회원 =====
+const PAGE = 20;
 const TIER_LABELS = { tier1: 'Platinum 플래티늄', tier2: 'Gold 골드', tier3: 'Silver 실버' };
-
-function tierSelectHtml(u) {
-  const current = u.tier || 'tier3';
-  const options = ['tier1', 'tier2', 'tier3'].map(t =>
-    `<option value="${t}" ${t === current ? 'selected' : ''}>${TIER_LABELS[t]}</option>`
-  ).join('');
-  if (u.approved) {
-    // 이미 승인된 고객: 등급을 바꾸면 확인창이 뜨고, 확인해야만 실제로 저장됨
-    return `<select onchange="confirmTierChange('${u.id}', this)">${options}</select>`;
-  }
-  // 승인 대기중: 승인 버튼을 누를 때 이 선택값으로 등급이 함께 저장됨 (기본 Tier 3)
-  return `<select id="tierSelect-${u.id}">${options}</select>`;
-}
-
-function renderUserTable(){
-  const start = (pageState.user-1)*PAGE_SIZE;
-  const tbody = document.querySelector('#userTable tbody');
-  tbody.innerHTML = allUsers.slice(start, start+PAGE_SIZE).map(u => `
-    <tr>
-      <td>${escapeHtml(u.phone)}</td><td>${escapeHtml(u.email)||'—'}</td><td>${escapeHtml(u.company_name)||'—'}</td><td>${escapeHtml(u.address)||'—'}</td>
-      <td>${escapeHtml(u.rep_name)||'—'}</td>
-      <td>${tierSelectHtml(u)}</td>
-      <td>
-        <span class="pill ${u.is_admin?'admin':'normal'}">${u.is_admin?'관리자':'일반'}</span>
-        <button onclick="toggleAdmin('${u.id}','${u.phone}',${!u.is_admin})" style="margin-left:4px;padding:2px 8px;font-size:11px;">${u.is_admin?'해제':'지정'}</button>
-      </td>
-      <td><span class="pill ${u.approved?'approved':'pending'}">${u.approved?'승인됨':'대기중'}</span>${u.is_staff?'<span class="pill staff">직원</span>':''}${u.is_staff&&u.must_change_password?'<span class="pill mustpw">비번 변경 전</span>':''}</td>
-      <td>${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
-      <td>${u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—'}</td>
-      <td class="actions" style="white-space:nowrap;">
-        ${u.approved
-          ? `<button class="danger" onclick="setApproved('${u.id}',false)">승인취소</button>`
-          : `<button onclick="setApproved('${u.id}',true,document.getElementById('tierSelect-${u.id}').value)">승인</button>`}
-        <button onclick="resetPassword('${u.id}','${u.phone}')" style="margin-left:6px;">비번재설정</button>
-        <button class="danger" onclick="deleteUser('${u.id}','${u.phone}')" style="margin-left:6px;">삭제</button>
-      </td>
-    </tr>`).join('');
-  renderPager('userPager', allUsers.length, 'user', 'goUserPage');
-}
+const TIER_SHORT = { tier1: '플래티늄', tier2: '골드', tier3: '실버' };
+const TIER_CLASS = { tier1: 't1', tier2: 't2', tier3: 't3' };
+let allUsers = [];
+let memberFilter = null; // pending | approved | staff | admin | all
+let memberShown = PAGE;
 
 async function loadUsers() {
   const data = await api('/admin/users');
-  allUsers = data.users;
-  pageState.user = 1;
-  renderUserTable();
+  allUsers = data.users || [];
+  const pending = allUsers.filter(u => !u.approved).length;
+  $('kPending').textContent = pending;
+  $('kMembers').textContent = allUsers.length;
+  $('tilePending').classList.toggle('alert', pending > 0);
+  const dot = $('tabDot'); dot.textContent = pending; dot.classList.toggle('hidden', !pending);
+  if (memberFilter === null) memberFilter = pending ? 'pending' : 'all';
+  renderMembers();
+}
+function counts() {
+  return {
+    pending: allUsers.filter(u => !u.approved).length,
+    approved: allUsers.filter(u => u.approved).length,
+    staff: allUsers.filter(u => u.is_staff).length,
+    admin: allUsers.filter(u => u.is_admin).length,
+    all: allUsers.length,
+  };
+}
+function setFilter(f) { memberFilter = f; memberShown = PAGE; renderMembers(); }
+function goPending() { showTab('members'); setFilter('pending'); }
+function renderMembers() {
+  const c = counts();
+  const defs = [['pending', '승인 대기'], ['all', '전체'], ['approved', '승인됨'], ['staff', '직원'], ['admin', '관리자']];
+  $('memberChips').innerHTML = defs.filter(([k]) => k === 'all' || k === 'pending' || c[k] > 0)
+    .map(([k, l]) => `<button class="chip ${memberFilter === k ? 'on' : ''}" onclick="setFilter('${k}')">${l}<span class="n">${c[k]}</span></button>`).join('');
+  const q = $('memberSearch').value.trim().toLowerCase();
+  const qd = q.replace(/\D/g, '');
+  let list = allUsers.filter(u =>
+    memberFilter === 'pending' ? !u.approved : memberFilter === 'approved' ? u.approved :
+    memberFilter === 'staff' ? u.is_staff : memberFilter === 'admin' ? u.is_admin : true);
+  if (q) list = list.filter(u => (u.company_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) ||
+    (qd && String(u.phone || '').includes(qd)) || (u.rep_name || '').toLowerCase().includes(q));
+  const el = $('memberList');
+  if (!list.length) { el.innerHTML = `<div class="empty">${q ? '검색 결과가 없습니다.' : memberFilter === 'pending' ? '승인 대기 중인 회원이 없습니다 👍' : '회원이 없습니다.'}</div>`; return; }
+  el.innerHTML = list.slice(0, memberShown).map(u => {
+    const name = u.company_name || fmtPhone(u.phone);
+    const sub = [u.company_name ? fmtPhone(u.phone) : (u.email || ''), u.rep_name ? '담당 ' + u.rep_name : ''].filter(Boolean).join(' · ');
+    return `<button class="row" onclick="openMember('${escapeHtml(u.id)}')">
+      <div class="main">
+        <div class="t">${escapeHtml(name)}</div>
+        <div class="s">${escapeHtml(sub) || '&nbsp;'}</div>
+        <div class="badges">
+          ${u.approved ? '' : '<span class="b pending">승인 대기</span>'}
+          <span class="b ${TIER_CLASS[u.tier || 'tier3']}">${TIER_SHORT[u.tier || 'tier3']}</span>
+          ${u.is_staff ? '<span class="b staff">직원</span>' : ''}
+          ${u.is_staff && u.must_change_password ? '<span class="b red">비번 변경 전</span>' : ''}
+          ${u.is_admin ? '<span class="b admin">관리자</span>' : ''}
+          <span class="when">${escapeHtml(u.approved ? ago(u.last_seen) : '가입 ' + fmtDate(u.created_at))}</span>
+        </div>
+      </div>
+      <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg>
+    </button>`;
+  }).join('') + (list.length > memberShown ? `<button class="more" onclick="memberShown+=${PAGE};renderMembers()">더 보기 (${list.length - memberShown}명 남음)</button>` : '');
 }
 
-async function toggleAdmin(userId, phone, makeAdmin) {
-  const ok = confirm(
-    makeAdmin
-      ? `${phone} 고객을 관리자로 지정하시겠습니까?\n\n관리자가 되면 이 화면(admin.html) 전체에 접근할 수 있게 됩니다.`
-      : `${phone} 계정의 관리자 권한을 해제하시겠습니까?`
-  );
+// ----- 회원 상세 시트 -----
+let sheetUser = null, sheetTier = null;
+function openMember(id) {
+  const u = allUsers.find(x => String(x.id) === String(id)); if (!u) return;
+  sheetUser = u; sheetTier = u.tier || 'tier3';
+  renderSheet();
+  $('sheetBg').classList.add('open'); $('sheet').classList.add('open');
+}
+function closeSheet() { $('sheetBg').classList.remove('open'); $('sheet').classList.remove('open'); sheetUser = null; }
+function renderSheet() {
+  const u = sheetUser; if (!u) return;
+  const tierBtns = ['tier1', 'tier2', 'tier3'].map(t => `<button class="${sheetTier === t ? 'on' : ''}" onclick="pickTier('${t}')">${TIER_SHORT[t]}</button>`).join('');
+  const d = String(u.phone || '').replace(/\D/g, '');
+  $('sheet').innerHTML = `
+    <div class="grab"></div>
+    <h3>${escapeHtml(u.company_name || '상호명 없음')}</h3>
+    <div class="phone"><a href="tel:${escapeHtml(d)}">${escapeHtml(fmtPhone(u.phone))}</a></div>
+    <div class="badges" style="margin-top:8px">
+      <span class="b ${u.approved ? 'ok' : 'pending'}">${u.approved ? '승인됨' : '승인 대기'}</span>
+      ${u.is_staff ? '<span class="b staff">직원</span>' : ''}${u.is_staff && u.must_change_password ? '<span class="b red">비번 변경 전</span>' : ''}${u.is_admin ? '<span class="b admin">관리자</span>' : ''}
+    </div>
+    <dl class="info">
+      <div><dt>이메일</dt><dd>${escapeHtml(u.email || '—')}</dd></div>
+      <div><dt>주소</dt><dd>${escapeHtml(u.address || '—')}</dd></div>
+      <div><dt>담당 영업</dt><dd>${escapeHtml(u.rep_name || '—')}</dd></div>
+      <div><dt>가입일</dt><dd>${fmtDate(u.created_at)}</dd></div>
+      <div><dt>최근 방문</dt><dd>${u.last_seen ? fmtDate(u.last_seen) + ' (' + ago(u.last_seen) + ')' : '—'}</dd></div>
+    </dl>
+    <div class="label">${u.approved ? '등급 (누르면 바로 변경 확인)' : '승인할 등급 선택'}</div>
+    <div class="seg">${tierBtns}</div>
+    <div class="acts">
+      ${u.approved ? '' : `<button class="btn gold block" onclick="approveUser()">✓ ${TIER_SHORT[sheetTier]} 등급으로 승인</button>`}
+      <div class="acts2">
+        <button class="btn ghost" onclick="resetPassword()">비밀번호 재설정</button>
+        <button class="btn ghost" onclick="toggleAdmin()">${u.is_admin ? '관리자 해제' : '관리자 지정'}</button>
+      </div>
+      ${u.approved ? `<button class="btn ghost block" onclick="revokeUser()">승인 취소</button>` : ''}
+      <button class="btn danger block" onclick="deleteUser()">계정 삭제</button>
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>
+    </div>`;
+}
+async function pickTier(t) {
+  const u = sheetUser; if (!u) return;
+  if (!u.approved) { sheetTier = t; renderSheet(); return; }
+  const prev = u.tier || 'tier3'; if (t === prev) return;
+  const who = u.company_name ? `${fmtPhone(u.phone)} (${u.company_name})` : fmtPhone(u.phone);
+  if (!confirm(`${who} 고객을 ${TIER_LABELS[prev]} → ${TIER_LABELS[t]} 로 변경하시겠습니까?\n\n확인을 누르면 즉시 적용됩니다.`)) return;
+  try {
+    await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, tier: t }) });
+    toast('등급을 변경했습니다'); await refreshAfter(u.id);
+  } catch (e) { alert('등급 변경 실패: ' + e.message); }
+}
+async function approveUser() {
+  const u = sheetUser; if (!u) return;
+  try {
+    await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, approved: true, tier: sheetTier }) });
+    toast('승인했습니다'); await refreshAfter(u.id);
+  } catch (e) { alert('승인 실패: ' + e.message); }
+}
+async function revokeUser() {
+  const u = sheetUser; if (!u) return;
+  if (!confirm(`${fmtPhone(u.phone)} 고객의 승인을 취소할까요?\n취소하면 도매가가 보이지 않습니다.`)) return;
+  try {
+    await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, approved: false }) });
+    toast('승인을 취소했습니다'); await refreshAfter(u.id);
+  } catch (e) { alert('승인 취소 실패: ' + e.message); }
+}
+async function toggleAdmin() {
+  const u = sheetUser; if (!u) return;
+  const makeAdmin = !u.is_admin;
+  const ok = confirm(makeAdmin
+    ? `${fmtPhone(u.phone)} 고객을 관리자로 지정하시겠습니까?\n\n관리자가 되면 이 관리자 화면 전체에 접근할 수 있게 됩니다.`
+    : `${fmtPhone(u.phone)} 계정의 관리자 권한을 해제하시겠습니까?`);
   if (!ok) return;
   try {
-    await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, isAdmin: makeAdmin }) });
-    loadUsers();
-  } catch (e) {
-    alert('관리자 권한 변경 실패: ' + e.message);
-  }
+    await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, isAdmin: makeAdmin }) });
+    toast(makeAdmin ? '관리자로 지정했습니다' : '관리자 권한을 해제했습니다'); await refreshAfter(u.id);
+  } catch (e) { alert('관리자 권한 변경 실패: ' + e.message); }
 }
-
-async function setApproved(userId, approved, tier) {
-  const body = { userId, approved };
-  if (approved && tier) body.tier = tier;
-  await api('/admin/users', { method:'POST', body: JSON.stringify(body) });
-  loadUsers();
-}
-
-// 등급 드롭다운을 바꾸면 바로 저장하지 않고, 어떤 고객을 어느 등급으로
-// 바꾸는지 확인창을 띄웁니다. 취소하면 드롭다운을 원래 값으로 되돌립니다.
-// (여러 명을 한 번에 바꿀 때 실수로 잘못 누르는 걸 막기 위함)
-function confirmTierChange(userId, selectEl) {
-  const newTier = selectEl.value;
-  const user = allUsers.find(u => u.id === userId);
-  const prevTier = user ? (user.tier || 'tier3') : newTier;
-  if (newTier === prevTier) return;
-
-  const who = user ? (user.company_name ? `${user.phone} (${user.company_name})` : user.phone) : userId;
-  const ok = confirm(
-    `${who} 고객을 ${TIER_LABELS[prevTier]} → ${TIER_LABELS[newTier]} 로 변경하시겠습니까?\n\n확인을 누르면 즉시 적용됩니다.`
-  );
-  if (!ok) {
-    selectEl.value = prevTier; // 취소하면 원래 값으로 되돌림
-    return;
-  }
-  changeTier(userId, newTier);
-}
-
-async function changeTier(userId, tier) {
-  try {
-    await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, tier }) });
-    loadUsers();
-  } catch (e) {
-    alert('등급 변경 실패: ' + e.message);
-    loadUsers();
-  }
-}
-
-async function resetPassword(userId, phone) {
-  // 6자리 임시 비밀번호를 자동으로 만들어서, 관리자가 바로 고객에게 전달할 수 있게 합니다.
+async function resetPassword() {
+  const u = sheetUser; if (!u) return;
   const autoPassword = String(Math.floor(100000 + Math.random() * 900000));
-  const newPassword = prompt(
-    `${phone} 고객의 새 비밀번호(숫자 6자리)를 입력하세요.\n그냥 확인만 누르면 자동 생성된 번호로 설정됩니다.`,
-    autoPassword
-  );
-  if (newPassword === null) return; // 취소
+  const newPassword = prompt(`${fmtPhone(u.phone)} 고객의 새 비밀번호(숫자 6자리)를 입력하세요.\n그냥 확인만 누르면 자동 생성된 번호로 설정됩니다.`, autoPassword);
+  if (newPassword === null) return;
   if (!/^[0-9]{6}$/.test(newPassword)) { alert('비밀번호는 숫자 6자리여야 합니다.'); return; }
-
   try {
-    await api('/admin/users', { method:'POST', body: JSON.stringify({ userId, newPassword }) });
-    alert(`비밀번호가 재설정되었습니다.\n\n고객 번호: ${phone}\n새 비밀번호: ${newPassword}\n\n이 번호를 고객에게 전화나 문자로 전달해주세요.`);
-  } catch (e) {
-    alert(e.message);
-  }
+    await api('/admin/users', { method: 'POST', body: JSON.stringify({ userId: u.id, newPassword }) });
+    alert(`비밀번호가 재설정되었습니다.\n\n고객 번호: ${fmtPhone(u.phone)}\n새 비밀번호: ${newPassword}\n\n이 번호를 고객에게 전화나 문자로 전달해주세요.` + (u.is_staff ? '\n\n(직원 계정은 다음 로그인 때 본인 비밀번호로 다시 바꾸게 됩니다.)' : ''));
+    await refreshAfter(u.id);
+  } catch (e) { alert(e.message); }
 }
-
-async function deleteUser(userId, phone) {
-  if (!confirm(`${phone} 계정을 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+async function deleteUser() {
+  const u = sheetUser; if (!u) return;
+  if (!confirm(`${fmtPhone(u.phone)} 계정을 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
   try {
-    await api('/admin/users', { method:'DELETE', body: JSON.stringify({ userId }) });
-    loadUsers();
-  } catch (e) {
-    alert(e.message);
+    await api('/admin/users', { method: 'DELETE', body: JSON.stringify({ userId: u.id }) });
+    closeSheet(); toast('계정을 삭제했습니다'); await loadUsers();
+  } catch (e) { alert(e.message); }
+}
+async function refreshAfter(id) {
+  await loadUsers();
+  const u = allUsers.find(x => String(x.id) === String(id));
+  if (u && sheetUser) { sheetUser = u; sheetTier = u.tier || 'tier3'; renderSheet(); }
+}
+
+// ===== 매출 · 고객 데이터 =====
+let allTopSkus = [], allActiveUsers = [], allDormantCustomers = [], allCustomerRanking = [], monthlyRevenueData = [], salesByRepMonthData = [];
+let topSkuViewerMap = {};
+let lookupEvents = null;
+
+async function loadInsights(phone) {
+  const data = await api('/admin/insights' + (phone ? `?phone=${encodeURIComponent(phone)}` : ''));
+  if (data.events) lookupEvents = data.events;
+  if (data.topSkuViewers) {
+    topSkuViewerMap = {};
+    data.topSkuViewers.forEach(v => { const key = `${v.sku}|${v.eventType}`; (topSkuViewerMap[key] = topSkuViewerMap[key] || []).push(v); });
   }
+  if (data.topSkus) allTopSkus = data.topSkus;
+  if (data.activeUsers) allActiveUsers = data.activeUsers;
+  if (data.dormantCustomers) allDormantCustomers = data.dormantCustomers;
+  if (data.customerRanking) { allCustomerRanking = data.customerRanking; rankShown = 10; renderRanking(); }
+  if (data.monthlyRevenue) { monthlyRevenueData = data.monthlyRevenue; renderRevBars(); }
+  if (data.salesByRepMonth) {
+    salesByRepMonthData = data.salesByRepMonth;
+    const months = [...new Set(salesByRepMonthData.map(r => r.month))].sort().reverse();
+    const sel = $('repSalesMonth'); const cur = sel.value;
+    sel.innerHTML = months.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(monthLabel(m))}</option>`).join('');
+    if (months.includes(cur)) sel.value = cur;
+    renderRepSales();
+  }
+  updateTiles();
+  renderCust();
+}
+function monthLabel(m) { const [y, mo] = String(m).split('-'); return mo ? `${y}년 ${Number(mo)}월` : m; }
+function thisMonthKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+function updateTiles() {
+  const key = thisMonthKey();
+  const m = monthlyRevenueData.find(r => r.month === key);
+  $('kSales').textContent = money0(m ? m.totalSales : 0);
+  $('kOrders').textContent = m ? m.orderCount : 0;
+  $('kSalesLabel').textContent = `${Number(key.slice(5))}월 매출`;
+}
+function renderRepSales() {
+  const month = $('repSalesMonth').value;
+  const rows = salesByRepMonthData.filter(r => r.month === month).sort((a, b) => b.totalSales - a.totalSales);
+  $('mTotal').textContent = money0(rows.reduce((s, r) => s + r.totalSales, 0));
+  $('mCount').textContent = rows.reduce((s, r) => s + r.orderCount, 0) + '건';
+  $('mInc').textContent = money0(rows.reduce((s, r) => s + r.incentive, 0));
+  $('repList').innerHTML = rows.length ? rows.map(r => `
+    <div class="row"><div class="main"><div class="t">${escapeHtml(r.repName || '담당자 없음')}</div><div class="s">주문 ${r.orderCount}건 · 인센티브 ${money(r.incentive)}</div></div>
+    <div class="r"><div class="amt">${money(r.totalSales)}</div></div></div>`).join('') : '<div class="empty">해당 월 주문이 없습니다.</div>';
+}
+function renderRevBars() {
+  const el = $('revBars');
+  if (!monthlyRevenueData.length) { el.innerHTML = '<div class="empty">최근 12개월 주문 데이터가 없습니다.</div>'; return; }
+  const max = Math.max(...monthlyRevenueData.map(r => r.totalSales), 1); const key = thisMonthKey();
+  el.innerHTML = [...monthlyRevenueData].reverse().map(r => `
+    <div class="bar ${r.month === key ? 'cur' : ''}"><span class="m">${escapeHtml(String(r.month).slice(2).replace('-', '.'))}</span>
+      <span class="track"><span class="fill" style="display:block;width:${Math.max(2, Math.round(r.totalSales / max * 100))}%"></span></span>
+      <span class="val">${money0(r.totalSales)}</span></div>`).join('');
+}
+let rankShown = 10;
+function renderRanking() {
+  const el = $('rankList');
+  if (!allCustomerRanking.length) { el.innerHTML = '<div class="empty">주문 기록이 없습니다.</div>'; return; }
+  el.innerHTML = allCustomerRanking.slice(0, rankShown).map((r, i) => `
+    <div class="row"><span class="rank ${i < 3 ? 'top' : ''}">${i + 1}</span>
+      <div class="main"><div class="t">${escapeHtml(r.customer_name || fmtPhone(r.phone))}</div><div class="s">${escapeHtml(fmtPhone(r.phone))} · 주문 ${r.order_count}건</div></div>
+      <div class="r"><div class="amt">${money(r.total_spent)}</div></div></div>`).join('')
+    + (allCustomerRanking.length > rankShown ? `<button class="more" onclick="rankShown+=20;renderRanking()">더 보기 (${allCustomerRanking.length - rankShown}곳 남음)</button>` : '');
 }
 
-let salesByRepMonthData = [];
-
-function goTopSkuPage(p){ pageState.topSku = p; renderTopSkuTable(); }
-function renderTopSkuTable(){
-  const start = (pageState.topSku-1)*PAGE_SIZE;
-  document.querySelector('#topSkuTable tbody').innerHTML = allTopSkus.slice(start, start+PAGE_SIZE).map(r => {
-    const key = `${r.sku}|${r.event_type}`;
-    const viewers = topSkuViewerMap[key] || [];
-    const preview = viewers.slice(0, 3).map(v => escapeHtml(v.phone)).join(', ') || '—';
-    const more = viewers.length > 3
-      ? `<button class="viewer-more-btn" onclick="openViewersModal('${key.replace(/'/g, "\\'")}','${escapeHtml(r.product_name)} · ${escapeHtml(r.event_type)}')">전체보기 (${viewers.length}명)</button>`
-      : '';
-    return `<tr><td>${escapeHtml(r.product_name)}</td><td>${escapeHtml(r.event_type)}</td><td>${r.n}</td><td><span class="viewer-preview">${preview}</span>${more}</td></tr>`;
-  }).join('');
-  renderPager('topSkuPager', allTopSkus.length, 'topSku', 'goTopSkuPage');
+// ----- 고객 탭 -----
+let custView = 'active', custShown = PAGE;
+function setCustView(v) {
+  custView = v; custShown = PAGE;
+  document.querySelectorAll('#custChips .chip').forEach(c => c.classList.toggle('on', c.dataset.v === v));
+  renderCust();
 }
-
-function openViewersModal(key, title) {
-  const list = topSkuViewerMap[key] || [];
-  document.getElementById('viewersModalTitle').textContent = `${title} (${list.length}명)`;
-  document.getElementById('viewersModalBody').innerHTML = list.map(v => `
-    <tr><td>${escapeHtml(v.phone)}</td><td>${new Date(v.lastInteracted).toLocaleString('ko-KR')}</td></tr>
-  `).join('') || '<tr><td colspan="2">기록 없음</td></tr>';
-  document.getElementById('viewersModal').classList.add('open');
-}
-function closeViewersModal(){ document.getElementById('viewersModal').classList.remove('open'); }
-
 function formatDuration(seconds) {
   if (seconds === null || seconds === undefined) return '—';
   const s = Math.round(Number(seconds));
@@ -402,203 +593,110 @@ function formatDuration(seconds) {
   const h = Math.floor(m / 60), rm = m % 60;
   return rm ? `${h}시간 ${rm}분` : `${h}시간`;
 }
-
-function goActiveUserPage(p){ pageState.activeUser = p; renderActiveUserTable(); }
-  function renderActiveUserTable(){
-  const start = (pageState.activeUser-1)*PAGE_SIZE;
-  document.querySelector('#activeUserTable tbody').innerHTML = allActiveUsers.slice(start, start+PAGE_SIZE).map(r => `
-    <tr><td>${r.phone}</td><td>${r.activity_rank}위</td><td>${r.visit_count}</td><td>${formatDuration(r.last_visit_seconds)}</td><td>${formatDuration(r.avg_visit_seconds)}</td><td>${new Date(r.last_seen).toLocaleString('ko-KR')}</td></tr>
-  `).join('');
-  renderPager('activeUserPager', allActiveUsers.length, 'activeUser', 'goActiveUserPage');
+const EVENT_KO = { view_product: '상품 보기', add_to_cart: '장바구니 담기', remove_from_cart: '장바구니 빼기', search: '검색', category_browse: '카테고리 보기',
+  open_lightbox: '사진 크게 보기', submit_order: '주문 접수', switch_mode: '낱개/박스 전환', app_open: '접속', login: '로그인' };
+function nameForPhone(p) { const u = allUsers.find(x => x.phone === p); return u && u.company_name ? u.company_name : ''; }
+function moreBtn(total) { return total > custShown ? `<button class="more" onclick="custShown+=${PAGE};renderCust()">더 보기 (${total - custShown}개 남음)</button>` : ''; }
+function renderCust() {
+  const el = $('custBody'); if (!el) return;
+  if (custView === 'active') {
+    const L = allActiveUsers;
+    el.innerHTML = `<h2 class="sec">최근 30일 활발한 고객 <small>${L.length}명</small></h2><div class="card">` + (L.length ? L.slice(0, custShown).map(r => `
+      <div class="row"><span class="rank ${r.activity_rank <= 3 ? 'top' : ''}">${escapeHtml(r.activity_rank)}</span>
+        <div class="main"><div class="t">${escapeHtml(nameForPhone(r.phone) || fmtPhone(r.phone))}</div>
+        <div class="s">${escapeHtml(fmtDT(r.last_seen))} 접속 · 방문 ${escapeHtml(r.visit_count)}회</div>
+        <div class="s">평균 ${formatDuration(r.avg_visit_seconds)} 머묾 · 최근 ${formatDuration(r.last_visit_seconds)}</div></div></div>`).join('') + moreBtn(L.length) : '<div class="empty">최근 30일 활동이 없습니다.</div>') + '</div>'
+      + `<div class="exports" style="margin-top:12px;grid-template-columns:1fr"><button class="btn ghost" onclick="exportActiveUsersCsv()">활발한 고객 CSV</button></div>`;
+  } else if (custView === 'dormant') {
+    const L = allDormantCustomers;
+    el.innerHTML = `<h2 class="sec">휴면 고객 <small>30일 이상 미접속 · ${L.length}곳</small></h2><div class="card">` + (L.length ? L.slice(0, custShown).map(r => {
+      const n = daysAgo(r.last_seen);
+      return `<div class="row"><div class="main"><div class="t">${escapeHtml(r.company_name || fmtPhone(r.phone))}</div>
+        <div class="s"><a href="tel:${escapeHtml(String(r.phone || '').replace(/\D/g, ''))}" style="color:var(--navy);font-weight:700;text-decoration:none">${escapeHtml(fmtPhone(r.phone))}</a> · 가입 ${fmtDate(r.joined_at)}</div></div>
+        <div class="r"><span class="b ${n === null || n >= 60 ? 'red' : 'pending'}">${n === null ? '활동 기록 없음' : n + '일 미접속'}</span></div></div>`;
+    }).join('') + moreBtn(L.length) : '<div class="empty">휴면 고객이 없습니다.</div>') + '</div>'
+      + `<div class="exports" style="margin-top:12px;grid-template-columns:1fr"><button class="btn ghost" onclick="exportDormantCsv()">휴면 고객 CSV</button></div>`;
+  } else if (custView === 'top') {
+    const L = allTopSkus;
+    el.innerHTML = `<h2 class="sec">최근 30일 인기 상품 <small>조회·장바구니 기준</small></h2><div class="card">` + (L.length ? L.slice(0, custShown).map((r, i) => {
+      const key = `${r.sku}|${r.event_type}`; const viewers = topSkuViewerMap[key] || [];
+      return `<button class="row" onclick="openViewers(${i})"><span class="rank ${i < 3 ? 'top' : ''}">${i + 1}</span>
+        <div class="main"><div class="t">${escapeHtml(r.product_name || r.sku)}</div><div class="s">${escapeHtml(EVENT_KO[r.event_type] || r.event_type)} · 고객 ${viewers.length}곳</div></div>
+        <div class="r"><div class="amt">${escapeHtml(r.n)}회</div></div>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg></button>`;
+    }).join('') + moreBtn(L.length) : '<div class="empty">최근 30일 기록이 없습니다.</div>') + '</div>';
+  } else {
+    el.innerHTML = `<h2 class="sec">고객 행동 조회</h2>
+      <div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="insightPhone" placeholder="고객 전화번호 (숫자만)" inputmode="tel" onkeydown="if(event.key==='Enter')lookupPhone()"></div>
+      <button class="btn primary block" onclick="lookupPhone()">조회</button>
+      <div class="card" style="margin-top:12px" id="lookupList">${renderLookup()}</div>`;
+  }
+}
+function renderLookup() {
+  if (!lookupEvents) return '<div class="empty">전화번호를 넣고 조회를 누르세요.</div>';
+  if (!lookupEvents.length) return '<div class="empty">기록이 없습니다.</div>';
+  return lookupEvents.slice(0, 100).map(e => `<div class="row"><div class="main"><div class="t">${escapeHtml(EVENT_KO[e.event_type] || e.event_type)}</div>
+    <div class="s">${escapeHtml(e.sku || '')}${e.detail ? ' · ' + escapeHtml(JSON.stringify(e.detail)) : ''}</div></div><div class="r"><div class="s">${escapeHtml(fmtDT(e.created_at))}</div></div></div>`).join('');
+}
+async function lookupPhone() {
+  const p = ($('insightPhone').value || '').replace(/\D/g, '');
+  if (!p) { toast('전화번호를 넣어주세요'); return; }
+  try { lookupEvents = null; await loadInsights(p); $('insightPhone').value = p; }
+  catch (e) { alert(e.message); }
+}
+function openViewers(i) {
+  const r = allTopSkus[i]; if (!r) return;
+  const list = topSkuViewerMap[`${r.sku}|${r.event_type}`] || [];
+  sheetUser = null;
+  $('sheet').innerHTML = `<div class="grab"></div><h3>${escapeHtml(r.product_name || r.sku)}</h3>
+    <div class="phone">${escapeHtml(EVENT_KO[r.event_type] || r.event_type)} · ${list.length}곳</div>
+    <div class="card" style="margin-top:14px">${list.length ? list.map(v => `<div class="row"><div class="main"><div class="t">${escapeHtml(nameForPhone(v.phone) || fmtPhone(v.phone))}</div>
+      <div class="s">${escapeHtml(fmtPhone(v.phone))}</div></div><div class="r"><div class="s">${escapeHtml(fmtDT(v.lastInteracted))}</div></div></div>`).join('') : '<div class="empty">기록 없음</div>'}</div>
+    <button class="btn ghost block" style="margin-top:12px" onclick="closeSheet()">닫기</button>`;
+  $('sheetBg').classList.add('open'); $('sheet').classList.add('open');
 }
 
-function dormancyPill(lastSeen) {
-  if (!lastSeen) return `<span class="pill dormant60">활동기록 없음</span>`;
-  const days = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86400000);
-  if (days >= 60) return `<span class="pill dormant60">${days}일 미접속</span>`;
-  return `<span class="pill dormant30">${days}일 미접속</span>`;
-}
-
-function renderDormantTable(){
-  document.querySelector('#dormantTable tbody').innerHTML = allDormantCustomers.map(r => `
-    <tr>
-      <td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.company_name)||'—'}</td>
-      <td>${new Date(r.joined_at).toLocaleDateString('ko-KR')}</td>
-      <td>${r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '—'}</td>
-      <td>${dormancyPill(r.last_seen)}</td>
-    </tr>`).join('') || '<tr><td colspan="5">휴면 고객이 없습니다.</td></tr>';
-}
-
-function renderRankingTable(){
-  document.querySelector('#rankingTable tbody').innerHTML = allCustomerRanking.map((r, i) => `
-    <tr>
-      <td>${i+1}</td><td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.customer_name)||'—'}</td>
-      <td>${r.order_count}</td><td>$${Number(r.total_spent).toFixed(2)}</td>
-    </tr>`).join('') || '<tr><td colspan="5">주문 기록이 없습니다.</td></tr>';
-}
-
-function renderRevenueChart(){
-  const wrap = document.getElementById('revenueChart');
-  if (!monthlyRevenueData.length) { wrap.innerHTML = '<div style="font-size:12px;color:#5B6272;">최근 12개월 주문 데이터가 없습니다.</div>'; return; }
-  const max = Math.max(...monthlyRevenueData.map(r => r.totalSales), 1);
-  wrap.innerHTML = monthlyRevenueData.map(r => `
-    <div class="chart-bar-col">
-      <div class="chart-bar-value">$${Math.round(r.totalSales).toLocaleString()}</div>
-      <div class="chart-bar" style="height:${Math.max(4, Math.round(r.totalSales / max * 130))}px;" title="${r.month}: $${r.totalSales.toFixed(2)} (${r.orderCount}건)"></div>
-      <div class="chart-bar-label">${r.month}</div>
-    </div>`).join('');
-}
-
-// ===== CSV 내보내기 =====
-// Excel에서 한글이 깨지지 않도록 BOM을 앞에 붙여줍니다.
+// ===== CSV 내보내기 (엑셀 한글 깨짐 방지 BOM) =====
 function downloadCsv(filename, headers, rows) {
-  const esc = v => {
-    const s = (v === null || v === undefined) ? '' : String(v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const lines = [headers.map(esc).join(',')].concat(rows.map(r => r.map(esc).join(',')));
-  const csv = '\uFEFF' + lines.join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const esc = v => { const s = (v === null || v === undefined) ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = '﻿' + [headers.map(esc).join(',')].concat(rows.map(r => r.map(esc).join(','))).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
-
 async function exportPriceListCsv() {
   try {
     const data = await api('/admin/insights?export=prices');
-    const headers = ['카테고리','상품명(한글)','상품명(영문)','SKU','규격','박스당수량','Platinum 개당','Platinum 박스당','Gold 개당','Gold 박스당','Silver 개당','Silver 박스당'];
-    const rows = data.products.map(p => [
-      p.cat || '', p.nameKo || '', p.nameEn || '', p.sku || '', p.spec || '', p.ctnQty ?? '',
-      p.tbd ? '가격문의' : (p.platinumUnitPrice != null ? p.platinumUnitPrice.toFixed(2) : ''),
-      p.tbd ? '가격문의' : (p.platinumCtnPrice != null ? p.platinumCtnPrice.toFixed(2) : ''),
-      p.tbd ? '가격문의' : (p.goldUnitPrice != null ? p.goldUnitPrice.toFixed(2) : ''),
-      p.tbd ? '가격문의' : (p.goldCtnPrice != null ? p.goldCtnPrice.toFixed(2) : ''),
-      p.tbd ? '가격문의' : (p.silverUnitPrice != null ? p.silverUnitPrice.toFixed(2) : ''),
-      p.tbd ? '가격문의' : (p.silverCtnPrice != null ? p.silverCtnPrice.toFixed(2) : ''),
-    ]);
-    downloadCsv('전체_도매가격.csv', headers, rows);
-  } catch (e) {
-    alert('가격 내보내기 실패: ' + e.message);
-  }
+    const f = v => v != null ? v.toFixed(2) : '';
+    downloadCsv('전체_도매가격.csv', ['카테고리','상품명(한글)','상품명(영문)','SKU','규격','박스당수량','Platinum 개당','Platinum 박스당','Gold 개당','Gold 박스당','Silver 개당','Silver 박스당'],
+      data.products.map(p => [p.cat || '', p.nameKo || '', p.nameEn || '', p.sku || '', p.spec || '', p.ctnQty ?? '',
+        p.tbd ? '가격문의' : f(p.platinumUnitPrice), p.tbd ? '가격문의' : f(p.platinumCtnPrice), p.tbd ? '가격문의' : f(p.goldUnitPrice),
+        p.tbd ? '가격문의' : f(p.goldCtnPrice), p.tbd ? '가격문의' : f(p.silverUnitPrice), p.tbd ? '가격문의' : f(p.silverCtnPrice)]));
+  } catch (e) { alert('가격 내보내기 실패: ' + e.message); }
 }
-
 function exportUsersCsv() {
-  const headers = ['전화번호','이메일','상호명','주소','담당영업사원','등급','관리자여부','상태','가입일','최종 방문일'];
-  const rows = allUsers.map(u => [u.phone, u.email||'', u.company_name||'', u.address||'', u.rep_name||'', TIER_LABELS[u.tier||'tier3'], u.is_admin?'관리자':'일반', u.approved?'승인됨':'대기중', new Date(u.created_at).toLocaleDateString('ko-KR'), u.last_seen ? new Date(u.last_seen).toLocaleDateString('ko-KR') : '—']);
-  downloadCsv('회원목록.csv', headers, rows);
+  downloadCsv('회원목록.csv', ['전화번호','이메일','상호명','주소','담당영업사원','등급','관리자여부','직원여부','상태','가입일','최종 방문일'],
+    allUsers.map(u => [u.phone, u.email || '', u.company_name || '', u.address || '', u.rep_name || '', TIER_LABELS[u.tier || 'tier3'], u.is_admin ? '관리자' : '일반',
+      u.is_staff ? '직원' : '', u.approved ? '승인됨' : '대기중', fmtDate(u.created_at), u.last_seen ? fmtDate(u.last_seen) : '—']));
 }
-
 function exportActiveUsersCsv() {
-  const headers = ['전화번호','활동순위','방문횟수','마지막 방문 체류시간(초)','평균 체류시간(초)','마지막 접속'];
-  const rows = allActiveUsers.map(r => [r.phone, r.activity_rank, r.visit_count, r.last_visit_seconds ?? '', r.avg_visit_seconds ?? '', new Date(r.last_seen).toLocaleString('ko-KR')]);
-  downloadCsv('활발한고객_최근30일.csv', headers, rows);
+  downloadCsv('활발한고객_최근30일.csv', ['전화번호','활동순위','방문횟수','마지막 방문 체류시간(초)','평균 체류시간(초)','마지막 접속'],
+    allActiveUsers.map(r => [r.phone, r.activity_rank, r.visit_count, r.last_visit_seconds ?? '', r.avg_visit_seconds ?? '', new Date(r.last_seen).toLocaleString('ko-KR')]));
 }
-
 function exportDormantCsv() {
-  const headers = ['전화번호','상호명','가입일','마지막 접속'];
-  const rows = allDormantCustomers.map(r => [r.phone, r.company_name||'', new Date(r.joined_at).toLocaleDateString('ko-KR'), r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '활동기록 없음']);
-  downloadCsv('휴면고객.csv', headers, rows);
+  downloadCsv('휴면고객.csv', ['전화번호','상호명','가입일','마지막 접속'],
+    allDormantCustomers.map(r => [r.phone, r.company_name || '', fmtDate(r.joined_at), r.last_seen ? new Date(r.last_seen).toLocaleString('ko-KR') : '활동기록 없음']));
 }
-
 function exportRankingCsv() {
-  const headers = ['순위','전화번호','상호명','주문건수','총 구매액'];
-  const rows = allCustomerRanking.map((r, i) => [i+1, r.phone, r.customer_name||'', r.order_count, Number(r.total_spent).toFixed(2)]);
-  downloadCsv('고객별_구매액랭킹.csv', headers, rows);
+  downloadCsv('고객별_구매액랭킹.csv', ['순위','전화번호','상호명','주문건수','총 구매액'],
+    allCustomerRanking.map((r, i) => [i + 1, r.phone, r.customer_name || '', r.order_count, Number(r.total_spent).toFixed(2)]));
 }
-
 function exportMonthlyRevenueCsv() {
-  const headers = ['월','주문건수','총 매출'];
-  const rows = monthlyRevenueData.map(r => [r.month, r.orderCount, r.totalSales.toFixed(2)]);
-  downloadCsv('월별매출추이.csv', headers, rows);
+  downloadCsv('월별매출추이.csv', ['월','주문건수','총 매출'], monthlyRevenueData.map(r => [r.month, r.orderCount, Number(r.totalSales).toFixed(2)]));
 }
 
-async function loadInsights() {
-  const phone = document.getElementById('insightPhone').value.trim();
-  const data = await api('/admin/insights' + (phone ? `?phone=${encodeURIComponent(phone)}` : ''));
-  if (data.events) {
-    document.querySelector('#insightTable tbody').innerHTML = data.events.map(e => `
-      <tr><td>${new Date(e.created_at).toLocaleString('ko-KR')}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.sku)||'—'}</td><td>${e.detail?escapeHtml(JSON.stringify(e.detail)):'—'}</td></tr>
-    `).join('');
-  }
-  if (data.topSkuViewers) {
-    topSkuViewerMap = {};
-    data.topSkuViewers.forEach(v => {
-      const key = `${v.sku}|${v.eventType}`;
-      (topSkuViewerMap[key] = topSkuViewerMap[key] || []).push(v);
-    });
-  }
-  if (data.topSkus) {
-    allTopSkus = data.topSkus;
-    pageState.topSku = 1;
-    renderTopSkuTable();
-  }
-  if (data.activeUsers) {
-    allActiveUsers = data.activeUsers;
-    pageState.activeUser = 1;
-    renderActiveUserTable();
-  }
-  if (data.dormantCustomers) {
-    allDormantCustomers = data.dormantCustomers;
-    renderDormantTable();
-  }
-  if (data.customerRanking) {
-    allCustomerRanking = data.customerRanking;
-    renderRankingTable();
-  }
-  if (data.monthlyRevenue) {
-    monthlyRevenueData = data.monthlyRevenue;
-    renderRevenueChart();
-  }
-  if (data.salesByRepMonth) {
-    salesByRepMonthData = data.salesByRepMonth;
-    const months = [...new Set(salesByRepMonthData.map(r => r.month))].sort().reverse();
-    const sel = document.getElementById('repSalesMonth');
-    const cur = sel.value;
-    sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
-    if (months.includes(cur)) sel.value = cur;
-    renderRepSalesTable();
-  }
-}
-
-function renderRepSalesTable() {
-  const month = document.getElementById('repSalesMonth').value;
-  const rows = salesByRepMonthData.filter(r => r.month === month);
-  const tbody = document.querySelector('#repSalesTable tbody');
-  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4">해당 월 주문 없음</td></tr>'; return; }
-  tbody.innerHTML = rows.map(r => `
-    <tr><td>${escapeHtml(r.repName)}</td><td>${r.orderCount}</td><td>$${r.totalSales.toFixed(2)}</td><td style="color:var(--green,#1E7A46);font-weight:700;">$${r.incentive.toFixed(2)}</td></tr>
-  `).join('');
-  const monthTotal = rows.reduce((s,r)=>s+r.totalSales,0);
-  const monthIncentive = rows.reduce((s,r)=>s+r.incentive,0);
-  tbody.innerHTML += `<tr style="font-weight:700;border-top:2px solid #0B1B33;"><td>합계 Total</td><td>${rows.reduce((s,r)=>s+r.orderCount,0)}</td><td>$${monthTotal.toFixed(2)}</td><td>$${monthIncentive.toFixed(2)}</td></tr>`;
-}
-
-// v8.3 — 모바일 카드 화면용: 표의 각 칸에 머리글 이름(data-label)을 자동으로 붙임 (표 내용이 바뀔 때마다)
-function labelTable(t){
-  const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
-  t.querySelectorAll('tbody tr').forEach(tr => {
-    [...tr.children].forEach((td, i) => {
-      if (td.hasAttribute('colspan')) { td.classList.add('nolabel'); return; }
-      if (!td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i] || '');
-      if (!heads[i]) td.classList.add('nolabel');
-    });
-  });
-}
-document.querySelectorAll('table.rt').forEach(t => {
-  labelTable(t);
-  new MutationObserver(() => labelTable(t)).observe(t.querySelector('tbody'), { childList: true });
-});
-
-if (token) {
-  document.getElementById('loginBox').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'block';
-  loadUsers().catch(()=>{ localStorage.removeItem('pk_token'); location.reload(); });
-  loadInsights();
-  resetInactivityTimer();
-}
+if (token) enterDashboard();
 </script>
 </body>
 </html>
