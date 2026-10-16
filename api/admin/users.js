@@ -89,14 +89,29 @@ async function handler(req, res) {
     const { rows } = await db.query(
       `SELECT u.id, u.phone, u.email, u.company_name, u.address, u.rep_name, u.tier, u.approved, u.is_admin, u.created_at, u.approved_at,
               u.is_staff, u.must_change_password,
-              la.last_seen
+              la.last_seen, rg.reg_detail
        FROM users u
        LEFT JOIN (
          SELECT phone, max(created_at) AS last_seen FROM behavior_events GROUP BY phone
        ) la ON la.phone = u.phone
+       LEFT JOIN (
+         SELECT DISTINCT ON (user_id) user_id, detail::text AS reg_detail
+         FROM behavior_events WHERE event_type = 'register' AND user_id IS NOT NULL
+         ORDER BY user_id, created_at
+       ) rg ON rg.user_id = u.id
        ORDER BY u.approved ASC, u.created_at DESC`
     );
-    return res.json({ users: rows });
+    // 2026-10-16 가입 자동 승인 표시용 — 가입 기록(behavior_events 'register')에서 레스토랑 이름·자동 승인 여부만 꺼냄
+    const users = rows.map(({ reg_detail, ...u }) => {
+      let d = null;
+      try { d = reg_detail ? JSON.parse(reg_detail) : null; } catch { d = null; }
+      return {
+        ...u,
+        signup_restaurant_name: d && typeof d.restaurantName === 'string' && d.restaurantName ? d.restaurantName.slice(0, 120) : null,
+        signup_auto_tier: d && d.autoApproved && ['tier1', 'tier2'].includes(d.tier) ? d.tier : null,
+      };
+    });
+    return res.json({ users });
   }
 
   if (req.method === 'POST') {
