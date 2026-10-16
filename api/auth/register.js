@@ -2,7 +2,8 @@
 const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 const { sendSms, toE164US } = require('../../lib/sms');
-const { signupDecision } = require('../../lib/signupRules');
+const { signupDecision, cleanRestaurantName, isCompleteAddress } = require('../../lib/signupRules');
+const { checkRestaurant } = require('../../lib/restaurantCheck');
 
 const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
 
@@ -19,13 +20,29 @@ function signupHeadline(d) {
   return d.approved ? `신규 회원가입 · 자동 승인 (${TIER_LABEL[d.tier]})` : '신규 회원가입 승인 요청';
 }
 function tierReason(d) {
-  if (d.reason === 'restaurant') return ' (가입 즉시 자동 승인 — 레스토랑 이름 입력)';
-  if (d.reason === 'address') return ' (가입 즉시 자동 승인 — 주소 입력)';
-  if (d.reason === 'incomplete_address') return ' (승인 대기 — 주소가 불완전함)';
-  return ' (승인 대기 — 레스토랑 이름·주소 없음)';
+  switch (d.reason) {
+    case 'restaurant_verified': return ' (가입 즉시 자동 승인 — 구글 지도에서 실제 식당 확인됨)';
+    case 'restaurant_unverified': return ' (가입 즉시 자동 승인 — 레스토랑이 확인되지 않아 골드. 확인되면 플래티늄으로 올려주세요)';
+    case 'address': return ' (가입 즉시 자동 승인 — 주소 입력)';
+    case 'restaurant_no_address': return ' (승인 대기 — 레스토랑 이름은 있으나 주소가 없어 확인 못 함)';
+    case 'incomplete_address': return ' (승인 대기 — 주소가 불완전함)';
+    default: return ' (승인 대기 — 레스토랑 이름·주소 없음)';
+  }
+}
+// 관리자 알림용 구글 확인 결과 한 줄
+function checkLine(c) {
+  if (!c) return '';
+  if (c.status === 'verified') return `✅ 실제 식당 확인됨 — ${c.match.name} (${c.match.type}) · ${c.match.address}`;
+  if (c.status === 'not_found') {
+    const why = { not_food: '식당이 아님', not_operational: '영업 중 아님', address_differs: '주소 다름', name_differs: '이름 다름', already_used: '이미 다른 계정이 이 식당으로 가입함' };
+    return c.nearest ? `❌ 확인 안 됨 — 가장 가까운 결과: ${c.nearest.name} · ${c.nearest.address} (${why[c.nearest.why] || c.nearest.why})` : '❌ 확인 안 됨 — 구글 지도에 맞는 식당 없음';
+  }
+  if (c.status === 'error') return `⚠️ 확인 실패 — 구글 응답 문제 (${c.error})`;
+  if (c.status === 'no_address') return '— 주소가 없어 확인 못 함';
+  return '— 구글 확인 꺼짐 (키 없음)';
 }
 
-async function notifyAdminOfNewRegistration({ phone, email, companyName, address, repName, decision }) {
+async function notifyAdminOfNewRegistration({ phone, email, companyName, address, repName, decision, check }) {
   const { EMAILJS_SERVICE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY, EMAILJS_TEMPLATE_ID, ADMIN_NOTIFY_EMAIL } = process.env;
 
   if (!EMAILJS_SERVICE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY || !EMAILJS_TEMPLATE_ID) {
@@ -40,6 +57,7 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
     `이메일     : ${email || '—'}\n` +
     `상호명     : ${companyName || '—'}\n` +
     `레스토랑 이름 : ${d.restaurantName || '—'}\n` +
+    (d.restaurantName ? `구글 확인   : ${checkLine(check)}\n` : '') +
     `배송주소   : ${address || '—'}\n` +
     `담당 영업사원 : ${repName || '—'}\n` +
     `등급       : ${TIER_LABEL[d.tier]}${tierReason(d)}\n\n` +
@@ -73,7 +91,7 @@ async function notifyAdminOfNewRegistration({ phone, email, companyName, address
   }
 }
 
-async function notifySmsOfNewRegistration({ phone, companyName, repName, decision }) {
+async function notifySmsOfNewRegistration({ phone, companyName, repName, decision, check }) {
   const adminPhone = toE164US(process.env.ADMIN_PHONE_NUMBER);
   if (!adminPhone) {
     console.warn('[notifySms] ADMIN_PHONE_NUMBER not set — skipping SMS.');
@@ -87,6 +105,7 @@ async function notifySmsOfNewRegistration({ phone, companyName, repName, decisio
     `Phone 전화번호: ${phone}\n` +
     `Company 상호명: ${companyName || '—'}\n` +
     `Restaurant 레스토랑: ${d.restaurantName || '—'}\n` +
+    (d.restaurantName ? `구글 확인: ${checkLine(check).slice(0, 120)}\n` : '') +
     `Sales Rep 담당영업사원: ${repName || '—'}\n` +
     (d.approved ? `등급 변경: ${ERP_PATH}` : `승인: ${ERP_PATH}`);
   await sendSms({ to: adminPhone, body });
@@ -99,7 +118,9 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.body || {};
-    const { phone, password, repName } = body;
+    const phone = typeof body.phone === 'string' || typeof body.phone === 'number' ? String(body.phone) : '';
+    const password = typeof body.password === 'string' || typeof body.password === 'number' ? String(body.password) : '';
+    const repName = typeof body.repName === 'string' ? body.repName.trim().slice(0, 60) : '';
     const email = body.email ? String(body.email).trim().slice(0, 200) : '';
     const companyName = body.companyName ? String(body.companyName).trim().slice(0, 120) : '';
     const address = body.address ? String(body.address).trim().slice(0, 300) : '';
@@ -117,8 +138,22 @@ module.exports = async (req, res) => {
       return res.status(409).json({ error: 'PHONE_EXISTS', message: 'This phone number is already registered. Please log in. 이미 등록된 휴대폰 번호입니다.' });
     }
 
-    // 2026-10-16 — 레스토랑 이름을 넣으면 바로 플래티늄, 주소를 넣으면 바로 골드 (lib/signupRules.js)
-    const decision = signupDecision({ address, restaurantName: body.restaurantName });
+    // 2026-10-16 — 레스토랑 이름 + 주소 → 구글 지도로 실제 식당 확인 → 플래티늄 / 주소 → 골드 (lib/signupRules.js · lib/restaurantCheck.js)
+    const rn = cleanRestaurantName(body.restaurantName);
+    let check = null;
+    if (rn) {
+      if (!process.env.GOOGLE_PLACES_API_KEY) check = { status: 'off' };
+      else if (!isCompleteAddress(address)) check = { status: 'no_address' };
+      else check = await checkRestaurant(rn, address);
+      // 구글 확인은 "그 식당이 있다"는 것까지만 — 같은 식당(placeId)으로 이미 가입한 계정이 있으면 플래티늄을 주지 않고 골드로 (담당자 확인)
+      if (check.status === 'verified' && check.match && check.match.placeId) {
+        const pat = '"placeId": ?"' + String(check.match.placeId).replace(/[^A-Za-z0-9_-]/g, (c) => '\\' + c) + '"';
+        const used = await db.query(
+          `SELECT 1 FROM behavior_events WHERE event_type = 'register' AND detail::text ~ $1 LIMIT 1`, [pat]);
+        if (used.rows.length) check = { status: 'not_found', nearest: { ...check.match, why: 'already_used' } };
+      }
+    }
+    const decision = signupDecision({ address, restaurantName: rn, check });
     const storedCompany = companyName || decision.restaurantName;   // 상호명을 비워 두면 레스토랑 이름을 상호명으로
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -133,13 +168,22 @@ module.exports = async (req, res) => {
       [rows[0].id, cleanPhone, JSON.stringify({
         email, address, restaurantName: decision.restaurantName || null,
         autoApproved: decision.approved, tier: decision.tier, reason: decision.reason,
+        restaurantCheck: check ? {
+          status: check.status,
+          name: check.match ? check.match.name : (check.nearest ? check.nearest.name : null),
+          address: check.match ? check.match.address : (check.nearest ? check.nearest.address : null),
+          type: check.match ? check.match.type : (check.nearest ? check.nearest.type : null),
+          placeId: check.match ? check.match.placeId : null,
+          why: check.nearest ? check.nearest.why : null,
+          error: check.error || null,
+        } : null,
       })]
     );
 
-    await notifyAdminOfNewRegistration({ phone: cleanPhone, email, companyName: storedCompany, address, repName, decision }).catch((e) => {
+    await notifyAdminOfNewRegistration({ phone: cleanPhone, email, companyName: storedCompany, address, repName, decision, check }).catch((e) => {
       console.error('[register] notifyAdminOfNewRegistration threw:', e.message);
     });
-    await notifySmsOfNewRegistration({ phone: cleanPhone, companyName: storedCompany, repName, decision }).catch((e) => {
+    await notifySmsOfNewRegistration({ phone: cleanPhone, companyName: storedCompany, repName, decision, check }).catch((e) => {
       console.error('[register] notifySmsOfNewRegistration threw:', e.message);
     });
 
@@ -150,12 +194,14 @@ module.exports = async (req, res) => {
         message: `Welcome! Your account is approved as ${en}. Log in to see wholesale prices. 가입이 완료되어 ${ko} 등급으로 바로 승인되었습니다.`,
         approved: true,
         tier: decision.tier,
+        restaurantCheck: check ? check.status : null,
       });
     }
     return res.status(201).json({
       message: 'Registration received. Prices will be visible once an admin approves your account. 가입 신청이 접수되었습니다.',
       approved: false,
       tier: decision.tier,
+      restaurantCheck: check ? check.status : null,
     });
   } catch (err) {
     console.error(err);

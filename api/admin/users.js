@@ -98,7 +98,7 @@ async function handler(req, res) {
          SELECT DISTINCT ON (user_id) user_id, detail::text AS reg_detail
          FROM behavior_events WHERE event_type = 'register' AND user_id IS NOT NULL
          ORDER BY user_id, created_at
-       ) rg ON rg.user_id = u.id
+       ) rg ON rg.user_id::text = u.id::text
        ORDER BY u.approved ASC, u.created_at DESC`
     );
     // 2026-10-16 가입 자동 승인 표시용 — 가입 기록(behavior_events 'register')에서 레스토랑 이름·자동 승인 여부만 꺼냄
@@ -108,6 +108,9 @@ async function handler(req, res) {
       return {
         ...u,
         signup_restaurant_name: d && typeof d.restaurantName === 'string' && d.restaurantName ? d.restaurantName.slice(0, 120) : null,
+        signup_restaurant_check: d && d.restaurantCheck && typeof d.restaurantCheck === 'object' && typeof d.restaurantCheck.status === 'string'
+          ? { status: d.restaurantCheck.status, name: d.restaurantCheck.name || null, address: d.restaurantCheck.address || null, why: d.restaurantCheck.why || null }
+          : null,
         signup_auto_tier: d && d.autoApproved && ['tier1', 'tier2'].includes(d.tier) ? d.tier : null,
       };
     });
