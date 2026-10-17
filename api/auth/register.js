@@ -3,7 +3,8 @@ const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 const { sendSms, toE164US } = require('../../lib/sms');
 const { signupDecision, cleanRestaurantName, isCompleteAddress } = require('../../lib/signupRules');
-const { checkRestaurant } = require('../../lib/restaurantCheck');
+const crypto = require('crypto');
+const { checkRestaurant, searchRestaurants, signPlace, verifyPlaceToken } = require('../../lib/restaurantCheck');
 
 const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
 
@@ -21,6 +22,7 @@ function signupHeadline(d) {
 }
 function tierReason(d) {
   switch (d.reason) {
+    case 'restaurant_selected': return ' (가입 즉시 자동 승인 — 고객이 구글 지도 검색에서 식당을 고름)';
     case 'restaurant_verified': return ' (가입 즉시 자동 승인 — 구글 지도에서 실제 식당 확인됨)';
     case 'restaurant_unverified': return ' (가입 즉시 자동 승인 — 레스토랑이 확인되지 않아 골드. 확인되면 플래티늄으로 올려주세요)';
     case 'address': return ' (가입 즉시 자동 승인 — 주소 입력)';
@@ -32,7 +34,9 @@ function tierReason(d) {
 // 관리자 알림용 구글 확인 결과 한 줄
 function checkLine(c) {
   if (!c) return '';
-  if (c.status === 'verified') return `✅ 실제 식당 확인됨 — ${c.match.name} (${c.match.type}) · ${c.match.address}`;
+  const dup = c.dup ? ' · ⚠️ 같은 식당으로 가입한 다른 계정이 있음' : '';
+  if (c.status === 'selected') return `✅ 구글 지도 검색에서 고른 식당 — ${c.match.name} (${c.match.type}) · ${c.match.address}${dup}`;
+  if (c.status === 'verified') return `✅ 실제 식당 확인됨 — ${c.match.name} (${c.match.type}) · ${c.match.address}${dup}`;
   if (c.status === 'not_found') {
     const why = { not_food: '식당이 아님', not_operational: '영업 중 아님', address_differs: '주소 다름', name_differs: '이름 다름', already_used: '이미 다른 계정이 이 식당으로 가입함' };
     return c.nearest ? `❌ 확인 안 됨 — 가장 가까운 결과: ${c.nearest.name} · ${c.nearest.address} (${why[c.nearest.why] || c.nearest.why})` : '❌ 확인 안 됨 — 구글 지도에 맞는 식당 없음';
@@ -112,23 +116,52 @@ async function notifySmsOfNewRegistration({ phone, companyName, repName, decisio
   await sendSms({ to: adminPhone, body });
 }
 
-// 구글 확인 하루 한도 (기본 100건 → 한 달 최대 약 3,000건, 무료 5,000건 안쪽). 넘으면 그날은 확인하지 않고 골드로 시작.
-// 가입 기록(behavior_events 'register')에서 최근 24시간 동안 실제로 구글에 물어본 건수를 센다.
+// 구글 호출 하루 한도 (기본 150건 → 한 달 최대 약 4,500건, 무료 5,000건 안쪽). 레스토랑 검색 + 가입 때 자동 확인을 합쳐서 센다.
+// 넘으면 그날은 검색을 막고(이름·주소로 가입 → 골드, 담당자 확인) 자동 확인도 하지 않는다.
 function dailyLimit() {
-  const n = parseInt(process.env.GOOGLE_PLACES_DAILY_LIMIT || '100', 10);
-  return Number.isFinite(n) && n >= 0 ? n : 100;
+  const n = parseInt(process.env.GOOGLE_PLACES_DAILY_LIMIT || '150', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 150;
 }
 async function googleChecksToday() {
   try {
     const { rows } = await db.query(
       `SELECT count(*)::int AS n FROM behavior_events
-        WHERE event_type = 'register' AND created_at > now() - interval '24 hours'
-          AND detail::text ~ '"restaurantCheck": ?\\{[^}]*"status": ?"(verified|not_found|error)"'`);
+        WHERE created_at > now() - interval '24 hours'
+          AND ((event_type = 'register' AND detail::text ~ '"restaurantCheck": ?\\{[^}]*"status": ?"(verified|not_found|error)"')
+            OR (event_type = 'restaurant_search' AND detail::text ~ '"called": ?true'))`);
     return rows[0] ? rows[0].n : 0;
   } catch (e) {
     console.error('[register] googleChecksToday failed:', e.message);
     return Number.MAX_SAFE_INTEGER;   // 셀 수 없으면 안전하게 구글을 부르지 않음
   }
+}
+const SEARCH_PER_IP_HOUR = 20;
+function ipHash(req) {
+  const ip = String((req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip'])) || '').split(',')[0].trim();
+  return ip ? crypto.createHash('sha256').update('pk-ip|' + ip).digest('hex').slice(0, 16) : 'unknown';
+}
+
+// 가입 화면 "레스토랑 검색" — POST /api/auth/register { action: 'searchRestaurant', query }
+async function handleSearch(req, res, body) {
+  const query = String(body.query || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const letters = (query.match(/[A-Za-z가-힣\u3040-\u30ff\u4e00-\u9fff]/g) || []).length;
+  if (letters < 2) return res.status(400).json({ error: 'INVALID_QUERY', message: 'Please enter your restaurant name. 레스토랑 이름을 넣어주세요.' });
+  if (!process.env.GOOGLE_PLACES_API_KEY) {
+    return res.status(503).json({ error: 'SEARCH_OFF', message: 'Search is not available right now. 지금은 검색을 쓸 수 없습니다.' });
+  }
+  const ih = ipHash(req);
+  const recent = await db.query(
+    `SELECT count(*)::int AS n FROM behavior_events WHERE event_type = 'restaurant_search' AND created_at > now() - interval '1 hour' AND detail::text ~ $1`,
+    ['"ip": ?"' + ih + '"']);
+  if ((recent.rows[0] ? recent.rows[0].n : 0) >= SEARCH_PER_IP_HOUR || await googleChecksToday() >= dailyLimit()) {
+    await db.query(`INSERT INTO behavior_events (event_type, detail) VALUES ('restaurant_search', $1)`, [JSON.stringify({ ip: ih, called: false, status: 'limit' })]);
+    return res.status(429).json({ error: 'SEARCH_LIMIT', message: 'Search is busy — please try again later, or sign up with your restaurant name and address. 지금은 검색을 쓸 수 없습니다.' });
+  }
+  const r = await searchRestaurants(query);
+  await db.query(`INSERT INTO behavior_events (event_type, detail) VALUES ('restaurant_search', $1)`,
+    [JSON.stringify({ ip: ih, called: r.status !== 'off', status: r.status, n: r.results ? r.results.length : 0, error: r.error || null })]);
+  if (r.status !== 'ok') return res.status(502).json({ error: 'SEARCH_FAILED', message: 'Search failed — please try again. 검색에 실패했습니다. 다시 시도해주세요.' });
+  return res.json({ results: r.results.map((x) => ({ name: x.name, address: x.address, type: x.type, token: signPlace(x) })) });
 }
 
 module.exports = async (req, res) => {
@@ -138,12 +171,13 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.body || {};
+    if (body.action === 'searchRestaurant') return await handleSearch(req, res, body);
     const phone = typeof body.phone === 'string' || typeof body.phone === 'number' ? String(body.phone) : '';
     const password = typeof body.password === 'string' || typeof body.password === 'number' ? String(body.password) : '';
     const repName = typeof body.repName === 'string' ? body.repName.trim().slice(0, 60) : '';
     const email = body.email ? String(body.email).trim().slice(0, 200) : '';
     const companyName = body.companyName ? String(body.companyName).trim().slice(0, 120) : '';
-    const address = body.address ? String(body.address).trim().slice(0, 300) : '';
+    let address = body.address ? String(body.address).trim().slice(0, 300) : '';
 
     if (!phone || !/^[0-9]{9,15}$/.test(phone.replace(/[^0-9]/g, ''))) {
       return res.status(400).json({ error: 'INVALID_PHONE', message: 'Please enter a valid phone number. 휴대폰 번호를 정확히 입력해주세요.' });
@@ -159,20 +193,24 @@ module.exports = async (req, res) => {
     }
 
     // 2026-10-16 — 레스토랑 이름 + 주소 → 구글 지도로 실제 식당 확인 → 플래티늄 / 주소 → 골드 (lib/signupRules.js · lib/restaurantCheck.js)
-    const rn = cleanRestaurantName(body.restaurantName);
+    // 검색에서 고른 식당이면 (서버가 서명한 표 확인) → 이름·주소는 구글 값으로 채우고 무조건 플래티늄
+    const picked = body.restaurantToken ? verifyPlaceToken(body.restaurantToken) : null;
+    const rn = cleanRestaurantName(body.restaurantName) || (picked ? cleanRestaurantName(picked.name) : '');
+    if (picked && !isCompleteAddress(address)) address = picked.address.slice(0, 300);
     let check = null;
-    if (rn) {
+    if (picked) check = { status: 'selected', match: { placeId: picked.placeId, name: picked.name, address: picked.address, type: picked.type } };
+    if (rn && !check) {
       if (!process.env.GOOGLE_PLACES_API_KEY) check = { status: 'off' };
       else if (!isCompleteAddress(address)) check = { status: 'no_address' };
       else if (await googleChecksToday() >= dailyLimit()) check = { status: 'limit' };   // 구글 비용 안전장치
       else check = await checkRestaurant(rn, address);
-      // 구글 확인은 "그 식당이 있다"는 것까지만 — 같은 식당(placeId)으로 이미 가입한 계정이 있으면 플래티늄을 주지 않고 골드로 (담당자 확인)
-      if (check.status === 'verified' && check.match && check.match.placeId) {
-        const pat = '"placeId": ?"' + String(check.match.placeId).replace(/[^A-Za-z0-9_-]/g, (c) => '\\' + c) + '"';
-        const used = await db.query(
-          `SELECT 1 FROM behavior_events WHERE event_type = 'register' AND detail::text ~ $1 LIMIT 1`, [pat]);
-        if (used.rows.length) check = { status: 'not_found', nearest: { ...check.match, why: 'already_used' } };
-      }
+    }
+    // 같은 식당(placeId)으로 이미 가입한 계정이 있으면 — 등급은 그대로(플래티늄), 관리자 알림·ERP에 "같은 식당 다른 계정 있음" 표시만
+    if (check && (check.status === 'verified' || check.status === 'selected') && check.match && check.match.placeId) {
+      const pat = '"placeId": ?"' + String(check.match.placeId).replace(/[^A-Za-z0-9_-]/g, (c) => '\\' + c) + '"';
+      const used = await db.query(
+        `SELECT 1 FROM behavior_events WHERE event_type = 'register' AND detail::text ~ $1 LIMIT 1`, [pat]);
+      if (used.rows.length) check.dup = true;
     }
     const decision = signupDecision({ address, restaurantName: rn, check });
     const storedCompany = companyName || decision.restaurantName;   // 상호명을 비워 두면 레스토랑 이름을 상호명으로
@@ -197,6 +235,7 @@ module.exports = async (req, res) => {
           placeId: check.match ? check.match.placeId : null,
           why: check.nearest ? check.nearest.why : null,
           error: check.error || null,
+          dup: !!check.dup,
         } : null,
       })]
     );

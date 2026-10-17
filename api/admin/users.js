@@ -109,7 +109,7 @@ async function handler(req, res) {
         ...u,
         signup_restaurant_name: d && typeof d.restaurantName === 'string' && d.restaurantName ? d.restaurantName.slice(0, 120) : null,
         signup_restaurant_check: d && d.restaurantCheck && typeof d.restaurantCheck === 'object' && typeof d.restaurantCheck.status === 'string'
-          ? { status: d.restaurantCheck.status, name: d.restaurantCheck.name || null, address: d.restaurantCheck.address || null, why: d.restaurantCheck.why || null }
+          ? { status: d.restaurantCheck.status, name: d.restaurantCheck.name || null, address: d.restaurantCheck.address || null, why: d.restaurantCheck.why || null, dup: !!d.restaurantCheck.dup }
           : null,
         signup_auto_tier: d && d.autoApproved && ['tier1', 'tier2'].includes(d.tier) ? d.tier : null,
       };
