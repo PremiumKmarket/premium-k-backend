@@ -39,6 +39,7 @@ function checkLine(c) {
   }
   if (c.status === 'error') return `⚠️ 확인 실패 — 구글 응답 문제 (${c.error})`;
   if (c.status === 'no_address') return '— 주소가 없어 확인 못 함';
+  if (c.status === 'limit') return '⚠️ 오늘 구글 확인 한도(비용 안전장치)를 넘어 확인하지 않음 — 담당자가 확인해 주세요';
   return '— 구글 확인 꺼짐 (키 없음)';
 }
 
@@ -111,6 +112,25 @@ async function notifySmsOfNewRegistration({ phone, companyName, repName, decisio
   await sendSms({ to: adminPhone, body });
 }
 
+// 구글 확인 하루 한도 (기본 100건 → 한 달 최대 약 3,000건, 무료 5,000건 안쪽). 넘으면 그날은 확인하지 않고 골드로 시작.
+// 가입 기록(behavior_events 'register')에서 최근 24시간 동안 실제로 구글에 물어본 건수를 센다.
+function dailyLimit() {
+  const n = parseInt(process.env.GOOGLE_PLACES_DAILY_LIMIT || '100', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 100;
+}
+async function googleChecksToday() {
+  try {
+    const { rows } = await db.query(
+      `SELECT count(*)::int AS n FROM behavior_events
+        WHERE event_type = 'register' AND created_at > now() - interval '24 hours'
+          AND detail::text ~ '"restaurantCheck": ?\\{[^}]*"status": ?"(verified|not_found|error)"'`);
+    return rows[0] ? rows[0].n : 0;
+  } catch (e) {
+    console.error('[register] googleChecksToday failed:', e.message);
+    return Number.MAX_SAFE_INTEGER;   // 셀 수 없으면 안전하게 구글을 부르지 않음
+  }
+}
+
 module.exports = async (req, res) => {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -144,6 +164,7 @@ module.exports = async (req, res) => {
     if (rn) {
       if (!process.env.GOOGLE_PLACES_API_KEY) check = { status: 'off' };
       else if (!isCompleteAddress(address)) check = { status: 'no_address' };
+      else if (await googleChecksToday() >= dailyLimit()) check = { status: 'limit' };   // 구글 비용 안전장치
       else check = await checkRestaurant(rn, address);
       // 구글 확인은 "그 식당이 있다"는 것까지만 — 같은 식당(placeId)으로 이미 가입한 계정이 있으면 플래티늄을 주지 않고 골드로 (담당자 확인)
       if (check.status === 'verified' && check.match && check.match.placeId) {
