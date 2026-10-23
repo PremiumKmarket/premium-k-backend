@@ -75,6 +75,7 @@ module.exports = async (req, res) => {
       approved: user ? user.approved : null,
       tier: user ? (user.tier || DEFAULT_TIER) : null,
       mustChangePassword: user ? !!user.must_change_password : null,
+      isStaff: user ? !!user.is_staff : null,   // v8.7 — 화면이 직원 표시(낱개 주문·크레딧)를 서버 값으로 맞추도록
     });
   } catch (err) {
     console.error(err);

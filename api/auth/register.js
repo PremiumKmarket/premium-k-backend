@@ -186,8 +186,11 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'INVALID_PASSWORD', message: 'Password must be 6 digits. 비밀번호는 숫자 6자리로 입력해주세요.' });
     }
 
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const existing = await db.query('SELECT id FROM users WHERE phone = $1', [cleanPhone]);
+    // v8.7 — 미국 번호 앞의 1(11자리)은 빼고 10자리로 저장, 같은 번호의 10·11자리 계정이 있으면 가입 막음 (로그인과 같은 규칙)
+    const digits = phone.replace(/[^0-9]/g, '');
+    const cleanPhone = digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits;
+    const variants = [...new Set([digits, cleanPhone, cleanPhone.length === 10 ? '1' + cleanPhone : cleanPhone])];
+    const existing = await db.query('SELECT id FROM users WHERE phone = ANY($1::text[])', [variants]);
     if (existing.rows.length) {
       return res.status(409).json({ error: 'PHONE_EXISTS', message: 'This phone number is already registered. Please log in. 이미 등록된 휴대폰 번호입니다.' });
     }
