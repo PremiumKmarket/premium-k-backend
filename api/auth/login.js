@@ -8,7 +8,7 @@
 //    · 비밀번호가 000000이 아니면 ERP를 보지 않는다(어떤 번호가 직원 번호인지 알려 주지 않도록).
 //    · 이미 가입한 일반 계정을 로그인만으로 직원으로 바꾸지는 않는다(가입 때 번호 본인 확인이 없어서) —
 //      관리자 화면 "ERP 직원 불러오기"에서 확인하고 전환한다.
-// ② 로그인 실패 제한 — 같은 번호 15분에 5번, 같은 접속(IP) 15분에 20번 틀리면 15분 동안 막는다(비밀번호 6자리 대입 방지).
+// ② 로그인 실패 제한 — 같은 번호 15분에 10번, 같은 접속(IP) 15분에 20번 틀리면 15분 동안 막는다(비밀번호 6자리 대입 방지).
 // ③ 번호 정리 — "1-213-…"처럼 11자리로 넣어도 10자리 계정을 찾는다(같은 사람 계정이 둘로 나뉘지 않게).
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
@@ -20,7 +20,7 @@ const { sendSms, toE164US } = require('../../lib/sms');
 const STAFF_FIRST_PASSWORD = '000000';
 const ROSTER_MAX_AGE_MS = 60 * 1000;
 const FAIL_WINDOW = '15 minutes';
-const MAX_FAILS_PER_PHONE = 5;
+const MAX_FAILS_PER_PHONE = 10;   // 2026-10-24 대표님 결정: 같은 번호 15분에 10번
 const MAX_FAILS_PER_IP = 20;
 
 function setCors(res) {
