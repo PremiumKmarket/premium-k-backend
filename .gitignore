@@ -6,3 +6,4 @@ node_modules/
 *.csv
 *.zip
 erp-catalog.json
+erp-add-*.json
