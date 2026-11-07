@@ -10,6 +10,17 @@
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const db = require('../lib/db');
 const { applyTierPricingToAll, DEFAULT_TIER } = require('../lib/pricing');
+const { maybeAutoAdd } = require('../lib/erpCatalogAuto');
+
+// v8.8 — ERP 신상품 자동 추가(lib/erpCatalogAuto.js). 실제 ERP 조회는 10분에 한 번(DB 상태 줄로 판단)이고,
+// 그 판단 쿼리도 서버 한 대당 1분에 한 번만 한다. 실패해도 상품 목록 응답에는 영향이 없다.
+let nextAutoAddCheck = 0;
+function autoAddTick() {
+  const now = Date.now();
+  if (now < nextAutoAddCheck) return Promise.resolve(null);
+  nextAutoAddCheck = now + 60 * 1000;
+  return maybeAutoAdd(db).catch(() => null);
+}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -50,6 +61,9 @@ module.exports = async (req, res) => {
         [user ? user.id : null, user ? user.phone : null, deviceId]
       ).catch(() => {});
     }
+
+    // 자동 추가를 먼저 끝내고 목록을 읽는다 — 이번에 들어간 신상품도 이 응답에 바로 보이게(ERP 조회는 최대 3초, 10분에 한 번)
+    await autoAddTick();
 
     const [{ rows: productRows }, { rows: imgRows }] = await Promise.all([
       db.query('SELECT * FROM products ORDER BY cat, sort_order, name_ko'),
