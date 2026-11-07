@@ -1,6 +1,7 @@
 // api/admin/products.js
 const db = require('../../lib/db');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
+const { recordSiteDelete } = require('../../lib/erpCatalogAuto');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -70,7 +71,8 @@ module.exports = async (req, res) => {
       const params = [];
       if (cat) { params.push(cat); sql += ` AND cat = $${params.length}`; }
       if (search) { params.push(`%${search}%`); sql += ` AND (name_ko ILIKE $${params.length} OR name_en ILIKE $${params.length} OR sku ILIKE $${params.length})`; }
-      sql += ' ORDER BY cat, sort_order, name_ko LIMIT 500';
+      // v8.8 — ERP 상품 일괄 추가로 500개를 넘으므로 한도를 올림(그전에는 뒤쪽 분류 상품이 관리자 화면에서 빠졌다)
+      sql += ' ORDER BY cat, sort_order, name_ko LIMIT 3000';
       const [{ rows }, { rows: imgRows }] = await Promise.all([
         db.query(sql, params),
         db.query('SELECT page_number, img FROM togo_page_images'),
@@ -117,7 +119,9 @@ module.exports = async (req, res) => {
     if (req.method === 'DELETE') {
       const { id } = req.body;
       if (!id) return res.status(400).json({ error: 'MISSING_ID' });
-      await db.query('DELETE FROM products WHERE id = $1', [id]);
+      const del = await db.query('DELETE FROM products WHERE id = $1 RETURNING id, sku', [id]);
+      // v8.8 — ERP 신상품 자동 추가가 지운 상품을 다시 넣지 않게 기록(일괄 추가 전이면 아무것도 안 함)
+      if (del.rows[0]) await recordSiteDelete(db, del.rows[0].sku, del.rows[0].id);
       return res.status(204).end();
     }
 

@@ -1,9 +1,8 @@
-// tests/erpCatalogAdd.test.js — ERP 신상품 추가 판단(lib/erpCatalogAdd.js)·시각 읽기(lib/erpCatalogAuto.js) 단위 시험
+// tests/erpCatalogAdd.test.js — ERP 신상품 추가 판단(lib/erpCatalogAdd.js) 단위 시험
 // 실행: node --test tests/   (DB·ERP 없이 돈다)
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planAddNew, stripPack, cleanText, nonProductReason, suggestCategory, learnWords, SITE_CATS } = require('../lib/erpCatalogAdd');
-const { parseErpTime } = require('../lib/erpCatalogAuto');
+const { planAddNew, planDigest, stripPack, cleanText, nonProductReason, suggestCategory, learnWords, SITE_CATS } = require('../lib/erpCatalogAdd');
 
 const item = (sku, nameKo, nameEn, extra = {}) => ({ sku, removed: false, nameKo, nameEn, cat: null, spec: null, ctnQty: 10, ctnPrice: 100, price: 12, piecePrice: 11, updatedAt: '2026-11-07 10:00:00.123456+00', ...extra });
 const site = [
@@ -61,9 +60,10 @@ test('넣을 것·넣지 않을 것을 가른다', () => {
     item('THRTSA0060', '참기름', 'Sesame Oil'),                               // ERP 목록에 같은 SKU 두 번
     item('THRTTG0001', '용기', 'Container', { cat: 'TOGO SOLUTION' }),        // TOGO
     item('THRTSA0070', '', 'Perilla Oil'),                                    // 한글명 없음 → 영문명으로
-    item('THRTSA0080', '들깨가루', 'Perilla Powder'),                         // 예전에 넣었다가 사이트에서 지움
+    item('THRTSA0080', '들깨가루', 'Perilla Powder'),                         // 예전에 사이트에 있었다가 관리자가 지움
+    item('THRTSA0090', '1CTN(CASE)=40P', '<>'),                              // 포장 표기·꺾쇠를 떼면 이름이 빔
   ];
-  const plan = planAddNew(erp, site, { previouslyAdded: new Set(['THRTSA0080']) });
+  const plan = planAddNew(erp, site, { knownSkus: new Set(['THRTSA0080']) });
   const addSkus = plan.add.map((a) => a.row.sku).sort();
   assert.deepEqual(addSkus, ['THFZSF0018', 'THRTSA0050', 'THRTSA0070']);
   const why = Object.fromEntries(plan.review.map((r) => [r.sku, r.why]));
@@ -77,6 +77,7 @@ test('넣을 것·넣지 않을 것을 가른다', () => {
   assert.match(why.THRTNP0002, /바코드/);
   assert.match(why.THRTSA0060, /두 번 이상/);
   assert.match(why.THRTSA0080, /지운 상품/);
+  assert.match(why.THRTSA0090, /모두 없음/);
   assert.equal(plan.skipped.exists, 1);
   assert.equal(plan.skipped.removed, 1);
   assert.equal(plan.skipped.togo, 1);
@@ -96,26 +97,12 @@ test('넣을 것·넣지 않을 것을 가른다', () => {
   assert.equal(plan.counts.tbd, 1);
 });
 
-test('자동 추가는 최근 바뀐 상품만 넣되, 중복 판단은 전체 목록으로 한다', () => {
-  const erp = [
-    item('THFZRE0200', '찹쌀떡', 'Mochi', { ctnQty: 30 }),
-    item('THFZSN0200', '찹쌀떡', 'Mochi', { ctnQty: 30 }),
-    item('THRTSA0050', '고추장', 'Gochujang'),
-    item('THRTSA0051', '된장', 'Doenjang'),
-  ];
-  const plan = planAddNew(erp, site, { onlySkus: new Set(['THFZSN0200', 'THRTSA0050']) });
-  assert.deepEqual(plan.add.map((a) => a.row.sku), ['THRTSA0050']);
-  assert.deepEqual(plan.review.map((r) => r.sku), ['THFZSN0200']);   // 쌍둥이(THFZRE0200)는 안 바뀌었어도 중복으로 잡힘
-  assert.equal(plan.skipped.unchanged, 1);                              // 된장: 넣을 수 있지만 이번에 바뀐 상품이 아님
-});
-
-test('ERP 시각 문자열을 읽는다', () => {
-  const base = Date.UTC(2026, 10, 7, 10, 0, 0);
-  assert.equal(parseErpTime('2026-11-07 10:00:00+00'), base);
-  assert.equal(parseErpTime('2026-11-07T10:00:00Z'), base);
-  assert.equal(parseErpTime('2026-11-07 02:00:00-08'), base);
-  assert.equal(parseErpTime('2026-11-07 15:30:00+05:30'), base);
-  assert.equal(Math.round(parseErpTime('2026-11-07 10:00:00.123456+00')), base + 123);
-  assert.equal(parseErpTime('어제'), null);
-  assert.equal(parseErpTime(null), null);
+test('목록 지문: 수가 같아도 내용이 다르면 다름', () => {
+  const a = planAddNew([item('THRTSA0050', '고추장', 'Gochujang'), item('THRTSA0051', '된장', 'Doenjang')], site);
+  const b = planAddNew([item('THRTSA0050', '고추장', 'Gochujang'), item('THRTSA0052', '청국장', 'Cheonggukjang')], site);
+  const c = planAddNew([item('THRTSA0051', '된장', 'Doenjang'), item('THRTSA0050', '고추장', 'Gochujang')], site);
+  assert.equal(a.add.length, b.add.length);
+  assert.notEqual(planDigest(a.add), planDigest(b.add));
+  assert.equal(planDigest(a.add), planDigest(c.add));   // 순서는 상관없음
+  assert.match(planDigest(a.add), /^[0-9a-f]{12}$/);
 });

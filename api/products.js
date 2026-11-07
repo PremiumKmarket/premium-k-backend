@@ -14,12 +14,15 @@ const { maybeAutoAdd } = require('../lib/erpCatalogAuto');
 
 // v8.8 — ERP 신상품 자동 추가(lib/erpCatalogAuto.js). 실제 ERP 조회는 10분에 한 번(DB 상태 줄로 판단)이고,
 // 그 판단 쿼리도 서버 한 대당 1분에 한 번만 한다. 실패해도 상품 목록 응답에는 영향이 없다.
+// 어떤 경우에도 상품 목록을 6초 넘게 붙잡지 않는다(ERP 3초 + DB 쿼리마다 3초 제한이 있지만 한 번 더 막아 둠).
 let nextAutoAddCheck = 0;
 function autoAddTick() {
   const now = Date.now();
   if (now < nextAutoAddCheck) return Promise.resolve(null);
   nextAutoAddCheck = now + 60 * 1000;
-  return maybeAutoAdd(db).catch(() => null);
+  let timer;
+  const deadline = new Promise((resolve) => { timer = setTimeout(() => resolve(null), 6000); });
+  return Promise.race([maybeAutoAdd(db).catch(() => null), deadline]).finally(() => clearTimeout(timer));
 }
 
 function setCors(res) {
