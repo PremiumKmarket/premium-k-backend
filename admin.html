@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0C1630">
 <title>Premium K · 관리자</title>
 <style>
-/* 관리자 화면 v2.4 (2026-10-12) — 넣은 번호를 ERP에도 저장. v2.3: ERP에 번호 없는 직원 번호 입력. v2.2: ERP 직원 불러오기. v2.1: 직원 추가·직원 지정. v2.0: 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
+/* 관리자 화면 v2.5 (2026-11-10) — 고객 계정 만들기(가입 없이 아이디·임시 비밀번호 전달)·임시 비밀번호 재발급. v2.4: 넣은 번호를 ERP에도 저장. v2.3: ERP에 번호 없는 직원 번호 입력. v2.2: ERP 직원 불러오기. v2.1: 직원 추가·직원 지정. v2.0: 휴대폰 우선. 요약 숫자 + 탭(회원/매출/고객/상품) + 회원 상세 시트 */
 :root{
   --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --gold-soft:#E8D49A; --ink:#1C2333; --ink2:#5B6272; --ink3:#8A90A0;
   --bg:#F3F4F7; --card:#fff; --line:#E3E6EC; --green:#1E7A46; --green-bg:#E7F6EC; --amber:#8A4B00; --amber-bg:#FFF3E2;
@@ -164,7 +164,7 @@ button.row:active{background:#F6F7FA}
 <div id="dashboard" class="hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.4</small></div>
+      <div class="brand">PREMIUM <b>K</b> 관리자<small>v2.5</small></div>
       <button class="logout" onclick="adminLogout()">로그아웃</button>
     </div>
   </header>
@@ -189,6 +189,7 @@ button.row:active{background:#F6F7FA}
         <button class="btn gold" onclick="openErpStaff()">⇣ ERP 직원 불러오기</button>
         <button class="btn ghost" onclick="openAddStaff()">＋ 직원 1명 추가</button>
       </div>
+      <button class="btn gold block" style="margin-bottom:10px" onclick="openAddCustomer()">＋ 고객 계정 만들기 (가입 없이 아이디·비밀번호 전달)</button>
       <div class="card" id="memberList"></div>
     </section>
 
@@ -399,7 +400,7 @@ function renderMembers() {
           ${u.approved ? '' : '<span class="b pending">승인 대기</span>'}
           <span class="b ${TIER_CLASS[u.tier || 'tier3']}">${TIER_SHORT[u.tier || 'tier3']}</span>
           ${u.is_staff ? '<span class="b staff">직원</span>' : ''}
-          ${u.is_staff && u.must_change_password ? '<span class="b red">비번 변경 전</span>' : ''}
+          ${u.must_change_password && !u.is_admin ? '<span class="b red">비번 변경 전</span>' : ''}
           ${u.is_admin ? '<span class="b admin">관리자</span>' : ''}
           <span class="when">${escapeHtml(u.approved ? ago(u.last_seen) : '가입 ' + fmtDate(u.created_at))}</span>
         </div>
@@ -428,7 +429,7 @@ function renderSheet() {
     <div class="phone"><a href="tel:${escapeHtml(d)}">${escapeHtml(fmtPhone(u.phone))}</a></div>
     <div class="badges" style="margin-top:8px">
       <span class="b ${u.approved ? 'ok' : 'pending'}">${u.approved ? '승인됨' : '승인 대기'}</span>
-      ${u.is_staff ? '<span class="b staff">직원</span>' : ''}${u.is_staff && u.must_change_password ? '<span class="b red">비번 변경 전</span>' : ''}${u.is_admin ? '<span class="b admin">관리자</span>' : ''}
+      ${u.is_staff ? '<span class="b staff">직원</span>' : ''}${u.must_change_password && !u.is_admin ? '<span class="b red">비번 변경 전</span>' : ''}${u.is_admin ? '<span class="b admin">관리자</span>' : ''}
     </div>
     <dl class="info">
       <div><dt>이메일</dt><dd>${escapeHtml(u.email || '—')}</dd></div>
@@ -444,6 +445,7 @@ function renderSheet() {
       <button class="btn ghost block" onclick="toggleStaff()">${u.is_staff ? '직원 해제' : '★ 직원으로 지정 (플래티늄 · 월 $100 크레딧)'}</button>
       <div class="acts2">
         <button class="btn ghost" onclick="resetPassword()">비밀번호 재설정</button>
+        ${(!u.is_staff && !u.is_admin) ? `<button class="btn ghost" onclick="issueTempPassword()">임시 비밀번호 발급</button>` : ''}
         <button class="btn ghost" onclick="toggleAdmin()">${u.is_admin ? '관리자 해제' : '관리자 지정'}</button>
       </div>
       ${u.approved ? `<button class="btn ghost block" onclick="revokeUser()">승인 취소</button>` : ''}
@@ -606,6 +608,94 @@ async function applyErpStaff() {
     alert(`반영했습니다.\n\n새 직원 계정 ${r.done.CREATE}명 · 전환 ${r.done.CONVERT}명 · 연결 ${r.done.LINK}명` + (inc ? ` · 퇴사 해제 ${r.done.DEACTIVATE}명` : '') +
       (r.done.CREATE ? `\n\n새 직원에게: order.premium-k.com 에서 본인 휴대폰 번호와 000000으로 로그인한 뒤 본인 비밀번호로 바꾸라고 전해주세요.` : ''));
   } catch (e) { alert('반영하지 않았습니다: ' + e.message); $('erpApplyBtn').disabled = false; }
+}
+
+// ----- v8.9 고객 계정 만들기 시트 (가입 없이 아이디·비밀번호 전달) -----
+function openAddCustomer() {
+  sheetUser = null;
+  const reps = [...new Set(allUsers.map(u => (u.rep_name || '').trim()).filter(Boolean))].sort();
+  $('sheet').innerHTML = `<div class="grab"></div>
+    <h3>고객 계정 만들기</h3>
+    <div class="phone" style="font-size:14px">고객이 가입하지 않아도 바로 주문할 수 있게 계정을 만들고, 아이디·임시 비밀번호를 드립니다.</div>
+    <div class="label">휴대폰 번호 (로그인 아이디)</div>
+    <input id="ncPhone" class="field" placeholder="예: 213-555-1234" inputmode="tel" autocomplete="off">
+    <div class="label">상호명</div>
+    <input id="ncCompany" class="field" placeholder="예: ABC Sushi" autocomplete="off">
+    <div class="label">이메일 (선택)</div>
+    <input id="ncEmail" class="field" placeholder="buyer@example.com" inputmode="email" autocomplete="off">
+    <div class="label">배송 주소 (선택)</div>
+    <input id="ncAddress" class="field" placeholder="예: 123 Main St, Los Angeles, CA 90005" autocomplete="off">
+    <div class="label">담당 영업사원 (선택)</div>
+    <input id="ncRep" class="field" list="ncRepList" placeholder="예: David Hwang" autocomplete="off">
+    <datalist id="ncRepList">${reps.map(r => `<option value="${escapeHtml(r)}">`).join('')}</datalist>
+    <div class="label">등급</div>
+    <select id="ncTier" class="field">
+      <option value="">— 고르세요 —</option>
+      <option value="tier1">${TIER_LABELS.tier1}</option><option value="tier2">${TIER_LABELS.tier2}</option><option value="tier3">${TIER_LABELS.tier3}</option>
+    </select>
+    <dl class="info">
+      <div><dt>로그인</dt><dd>이 휴대폰 번호 + 임시 비밀번호 6자리(만들면 한 번만 보여 드립니다)</dd></div>
+      <div><dt>첫 로그인</dt><dd>고객이 본인 비밀번호 6자리로 바꿔야 가격이 보이고 주문할 수 있습니다</dd></div>
+      <div><dt>승인</dt><dd>바로 승인 · 고른 등급 가격 적용</dd></div>
+    </dl>
+    <div class="acts">
+      <button class="btn gold block" id="addCustomerBtn" onclick="createCustomer()">고객 계정 만들기</button>
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>
+    </div>`;
+  $('sheetBg').classList.add('open'); $('sheet').classList.add('open');
+  setTimeout(() => $('ncPhone').focus(), 250);
+}
+// 만든 계정 안내문 — 고객에게 이메일·문자로 붙여 넣어 보내도록
+function credentialMessage(phone, pw, company) {
+  return `[Premium K 도매 주문 계정 안내]\n${company ? company + ' 담당자님, ' : ''}프리미엄 K 도매 주문 사이트 계정을 만들어 드렸습니다.\n\n` +
+    `· 주문 사이트: https://order.premium-k.com\n· 아이디(휴대폰 번호): ${fmtPhone(phone)}\n· 임시 비밀번호: ${pw}\n\n` +
+    `처음 로그인하시면 본인 비밀번호(숫자 6자리)로 바꾸신 뒤 도매가로 주문하실 수 있습니다.\n\n` +
+    `[Premium K Wholesale Ordering Account]\nWe created a wholesale ordering account for ${company || 'you'}.\n\n` +
+    `· Ordering site: https://order.premium-k.com\n· ID (cell phone number): ${fmtPhone(phone)}\n· Temporary password: ${pw}\n\n` +
+    `After your first login, please set your own 6-digit password, then you can order at wholesale prices.`;
+}
+function showCredentials(title, phone, pw, company) {
+  const msg = credentialMessage(phone, pw, company);
+  $('sheet').innerHTML = `<div class="grab"></div>
+    <h3>${escapeHtml(title)}</h3>
+    <dl class="info">
+      <div><dt>아이디</dt><dd><b>${escapeHtml(fmtPhone(phone))}</b></dd></div>
+      <div><dt>임시 비밀번호</dt><dd><b style="font-size:20px;letter-spacing:3px">${escapeHtml(pw)}</b></dd></div>
+    </dl>
+    <div class="phone" style="font-size:13px;color:#b45309">이 창을 닫으면 임시 비밀번호를 다시 볼 수 없습니다. 아래 안내문을 복사해 고객에게 보내 주세요.</div>
+    <textarea id="credMsg" class="field" style="height:220px;font-size:12.5px;line-height:1.45" readonly>${escapeHtml(msg)}</textarea>
+    <div class="acts">
+      <button class="btn gold block" onclick="copyCred()">안내문 복사</button>
+      <button class="btn ghost block" onclick="closeSheet()">닫기</button>
+    </div>`;
+  $('sheetBg').classList.add('open'); $('sheet').classList.add('open');
+}
+async function copyCred() {
+  const t = $('credMsg'); t.select();
+  try { await navigator.clipboard.writeText(t.value); toast('안내문을 복사했습니다'); }
+  catch { document.execCommand && document.execCommand('copy'); toast('복사했습니다 (안 되면 직접 선택해 복사하세요)'); }
+}
+async function createCustomer() {
+  const body = { action: 'createCustomer', phone: $('ncPhone').value.trim(), companyName: $('ncCompany').value.trim(), email: $('ncEmail').value.trim(),
+    address: $('ncAddress').value.trim(), repName: $('ncRep').value.trim(), tier: $('ncTier').value };
+  if (!body.phone || !body.companyName || !body.tier) { alert('휴대폰 번호·상호명·등급은 꼭 넣어주세요.'); return; }
+  if (!confirm(`이 고객 계정을 만들까요?\n\n${body.companyName} · ${fmtPhone(body.phone)}\n등급: ${TIER_LABELS[body.tier]} (바로 승인)`)) return;
+  $('addCustomerBtn').disabled = true;
+  try {
+    const r = await api('/admin/users', { method: 'POST', body: JSON.stringify(body) });
+    // 임시 비밀번호는 지금 한 번만 볼 수 있으니 먼저 보여 주고, 회원 목록 새로고침은 그 뒤에(실패해도 안내문은 그대로)
+    showCredentials('고객 계정을 만들었습니다', r.user.phone, r.tempPassword, r.user.company_name);
+    loadUsers().catch(() => {});
+  } catch (e) { alert('고객 계정을 만들지 못했습니다: ' + e.message); $('addCustomerBtn').disabled = false; }
+}
+async function issueTempPassword() {
+  const u = sheetUser; if (!u) return;
+  if (!confirm(`${u.company_name || fmtPhone(u.phone)} 고객에게 새 임시 비밀번호를 발급할까요?\n\n지금 비밀번호는 더 이상 쓸 수 없고, 고객은 첫 로그인 때 본인 비밀번호로 다시 바꿉니다.`)) return;
+  try {
+    const r = await api('/admin/users', { method: 'POST', body: JSON.stringify({ action: 'issueTempPassword', userId: u.id }) });
+    showCredentials('새 임시 비밀번호를 발급했습니다', r.user.phone, r.tempPassword, u.company_name);
+    loadUsers().catch(() => {});
+  } catch (e) { alert(e.message); }
 }
 
 // ----- 직원 추가 시트 -----

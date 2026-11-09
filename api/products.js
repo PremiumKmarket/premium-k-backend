@@ -10,6 +10,26 @@
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const db = require('../lib/db');
 const { applyTierPricingToAll, DEFAULT_TIER } = require('../lib/pricing');
+const { handleFromUrl, fetchShopProduct } = require('../lib/shopDetail');
+
+// v8.9 — GET /api/products?shop=<handle> : 이 주문 사이트 상품에 연결된 premium-k.com(샵) 상품의 설명·사진·소매가.
+//  · 주문 사이트 상품의 '상세 페이지 주소'(url)로 연결된 handle만 받는다(아무 샵 상품이나 대신 불러 주지 않음).
+//  · 도매가·회원 정보는 들어 있지 않아 누구에게나 같은 응답 → CDN 캐시 10분.
+async function shopDetail(req, res) {
+  const want = String(req.query.shop || '').trim().toLowerCase();
+  const { rows } = await db.query(`SELECT url FROM products WHERE url ILIKE '%premium-k.com/%products/%'`);
+  const linked = rows.some((r) => handleFromUrl(r.url) === want);
+  if (!want || !linked) return res.status(404).json({ error: 'NOT_LINKED' });
+  try {
+    const data = await fetchShopProduct(want);
+    if (!data) return res.status(404).json({ error: 'SHOP_PRODUCT_NOT_FOUND' });
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=600');
+    return res.json(data);
+  } catch (err) {
+    console.error('[products/shop]', want, err.message);
+    return res.status(502).json({ error: 'SHOP_UNAVAILABLE' });
+  }
+}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -38,6 +58,7 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
+    if (req.query && req.query.shop !== undefined) return await shopDetail(req, res);
     const token = getBearerToken(req);
     const user = await getUserFromToken(token);
     // 직원 초기 비밀번호 상태(must_change_password)에서는 비밀번호를 바꾸기 전까지 가격을 숨깁니다.

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0C1630">
 <title>Premium K · 상품 관리</title>
 <style>
-/* 상품 관리 v2.0 (2026-10-12) — 휴대폰 우선. 검색·카테고리 → 상품 목록 → 누르면 수정 시트 */
+/* 상품 관리 v2.1 (2026-11-10) — premium-k.com(샵) 상품 찾기로 상세 페이지 주소 채우기. v2.0: 휴대폰 우선. 검색·카테고리 → 상품 목록 → 누르면 수정 시트 */
 :root{
   --navy:#0C1630; --navy2:#16244A; --gold:#C9A456; --ink:#1C2333; --ink2:#5B6272; --ink3:#8A90A0;
   --bg:#F3F4F7; --line:#E3E6EC; --green:#1E7A46; --red:#B3261E; --red-bg:#FCE8E6; --amber:#8A4B00; --amber-bg:#FFF3E2;
@@ -98,7 +98,7 @@ main{padding:12px 14px calc(100px + env(safe-area-inset-bottom));max-width:760px
   <header class="top" id="top">
     <div class="top-row">
       <a class="back" href="admin.html">‹ 관리자</a>
-      <h1>상품 관리<small>v2.0</small></h1>
+      <h1>상품 관리<small>v2.1</small></h1>
     </div>
     <div class="search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -128,6 +128,22 @@ function escapeHtml(str) {
 }
 const money = n => (n === null || n === undefined || n === '') ? '' : '$' + Number(n).toFixed(2);
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
+
+// v8.9 — premium-k.com(샵)에서 같은 상품을 찾아 '상세 페이지 주소'를 채운다 (사람이 골라야 연결됨)
+async function findShopProduct() {
+  const q = [$('fNameEn') && $('fNameEn').value, $('fNameKo') && $('fNameKo').value].filter(Boolean).join(' ');
+  const box = $('shopFind');
+  box.innerHTML = '<div class="hint">찾는 중…</div>';
+  try {
+    const r = await api('/admin/products?action=shopSearch&q=' + encodeURIComponent(q));
+    if (!r.results.length) { box.innerHTML = '<div class="hint">비슷한 샵 상품이 없습니다. 주소를 직접 넣어 주세요.</div>'; return; }
+    box.innerHTML = r.results.slice(0, 8).map((x, i) => `<button type="button" class="row" style="width:100%;text-align:left" data-url="${escapeHtml(x.url)}" onclick="pickShopUrl(this)">
+      ${x.image ? `<img src="${escapeHtml(x.image + (x.image.includes('?') ? '&' : '?') + 'width=80')}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;margin-right:8px">` : ''}
+      <span style="flex:1"><b>${escapeHtml(x.title)}</b><br><small>소매가 $${x.price != null ? Number(x.price).toFixed(2) : '-'}</small></span></button>`).join('')
+      + '<div class="hint">맞는 상품을 누르면 주소 칸에 들어갑니다. 저장을 눌러야 반영됩니다.</div>';
+  } catch (e) { box.innerHTML = `<div class="hint">찾지 못했습니다: ${escapeHtml(e.message)}</div>`; }
+}
+function pickShopUrl(btn) { $('fUrl').value = btn.dataset.url; $('shopFind').innerHTML = '<div class="hint">주소를 넣었습니다. 저장을 눌러 주세요.</div>'; }
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -216,6 +232,9 @@ function renderSheet() {
       <div><label class="lbl">박스 입수 (개)</label><input class="field" id="fCtnQty" type="number" inputmode="numeric" value="${v(p.ctnQty)}"></div>
     </div>
     <label class="lbl">상세 페이지 주소 (URL)</label><input class="field" id="fUrl" value="${v(p.url)}" inputmode="url" autocapitalize="off">
+    <div class="hint">premium-k.com 상품 주소를 넣으면 주문 사이트 상세 창에 그 상품의 설명·사진·소매가가 함께 보입니다.</div>
+    <button type="button" class="btn ghost" style="margin-top:6px" onclick="findShopProduct()">🔎 premium-k.com 에서 이 상품 찾기</button>
+    <div id="shopFind" style="margin-top:6px"></div>
     <div class="hint">여기 넣는 가격이 플래티늄 가격입니다. 골드는 +10%, 실버는 +15%로 자동 계산됩니다.</div>
     <div class="acts">
       <button class="btn primary block" id="saveBtn" onclick="${isNew ? 'createProduct()' : 'saveProduct()'}">${isNew ? '상품 만들기' : '저장'}</button>

@@ -6,6 +6,10 @@
 //           see api/auth/reset.js, which just emails the admin the phone
 //           number; the admin resets it here and tells the customer)
 //        -> { action:'createStaff', name, phone } — 직원 계정 새로 만들기
+//        -> { action:'createCustomer', phone, companyName, email?, address?, repName?, tier } — v8.9 고객 계정 직접 만들기
+//           (가입 없이 고객사에 아이디·비밀번호를 드릴 때. 임시 비밀번호 6자리를 서버가 만들어 이 응답에서 한 번만 돌려준다.
+//            고객은 첫 로그인 때 본인 비밀번호로 바꿔야 가격·주문이 열린다)
+//        -> { action:'issueTempPassword', userId } — v8.9 고객에게 새 임시 비밀번호 발급(첫 로그인 때 다시 변경)
 //        -> { userId, makeStaff: true|false } — 기존 계정 직원 지정/해제
 //        -> { action:'erpStaffSync', expected, includeDeactivate } — ERP 직원 명단 반영
 // GET ?action=erpStaffPreview — ERP 직원 명단과 맞춰 본 미리보기 (변경 없음)
@@ -15,6 +19,7 @@
 // ERP 역할: 보기 = C-Level·Director·Sales·Accountant / 바꾸기 = C-Level·Director / 관리자 지정 = C-Level
 
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const db = require('../../lib/db');
 const { resolveAdmin } = require('../../lib/adminAuth');
 const { sendSms, toE164US } = require('../../lib/sms');
@@ -27,6 +32,16 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
+
+// 임시 비밀번호 6자리 — 같은 숫자 반복·연속 숫자(123456 등)는 피한다. 서버 어디에도 평문으로 남기지 않는다.
+function tempPassword() {
+  for (;;) {
+    const p = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    if (/^(\d)\1{5}$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p)) continue;
+    return p;
+  }
+}
+const cleanPhone10 = (v) => { let p = String(v || '').replace(/[^0-9]/g, ''); if (p.length === 11 && p[0] === '1') p = p.slice(1); return p; };
 
 const NO_MANAGE = { error: 'FORBIDDEN_ROLE', message: '회원 승인·등급·직원 변경은 C-Level·Director만 할 수 있습니다.' };
 
@@ -262,6 +277,65 @@ async function handler(req, res) {
       } finally {
         client.release();
       }
+    }
+
+    // v8.9 — 고객 계정 직접 만들기 (가입 없이 아이디·비밀번호 전달)
+    //  · 휴대폰 번호 10자리 = 로그인 아이디, 임시 비밀번호 6자리는 서버가 만들어 이 응답에서 한 번만 돌려준다(DB에는 해시만).
+    //  · 승인됨으로 바로 만들고, 첫 로그인 때 비밀번호 변경 필수(must_change_password) — 바꾸기 전에는 가격이 보이지 않는다.
+    if (action === 'createCustomer') {
+      const b = req.body;
+      const phone = cleanPhone10(b.phone);
+      const companyName = String(b.companyName || '').trim().slice(0, 120);
+      const email = String(b.email || '').trim().slice(0, 200) || null;
+      const address = String(b.address || '').trim().slice(0, 300) || null;
+      const repName = String(b.repName || '').trim().slice(0, 60) || null;
+      const t = ['tier1', 'tier2', 'tier3'].includes(b.tier) ? b.tier : null;
+      if (!/^[0-9]{10}$/.test(phone)) return res.status(400).json({ error: 'INVALID_PHONE', message: '휴대폰 번호 10자리를 넣어주세요. (이 번호가 고객의 로그인 아이디가 됩니다)' });
+      if (!companyName) return res.status(400).json({ error: 'MISSING_COMPANY', message: '상호명을 넣어주세요.' });
+      if (!t) return res.status(400).json({ error: 'MISSING_TIER', message: '등급(플래티늄·골드·실버)을 골라주세요.' });
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'INVALID_EMAIL', message: '이메일 형식이 맞지 않습니다.' });
+      // 예전 11자리(1+10자리)로 가입된 계정도 같은 고객으로 본다(가입·로그인과 같은 규칙) — 두 번째 계정이 생겨 주문 기록이 갈라지지 않게
+      const { rows: ex } = await db.query('SELECT id, company_name FROM users WHERE phone = ANY($1::text[]) ORDER BY id LIMIT 1', [[phone, '1' + phone]]);
+      if (ex[0]) return res.status(409).json({ error: 'PHONE_EXISTS', userId: ex[0].id, message: `이미 가입된 번호입니다 (${ex[0].company_name || '상호 없음'}). 그 계정에 새 임시 비밀번호를 발급하려면 회원 목록에서 그 고객을 여세요.` });
+      const pw = tempPassword();
+      const passwordHash = await bcrypt.hash(pw, 10);
+      let rows;
+      try {
+        ({ rows } = await db.query(
+          `INSERT INTO users (phone, password_hash, email, company_name, address, rep_name, approved, approved_at, tier, is_staff, must_change_password)
+           VALUES ($1, $2, $3, $4, $5, $6, TRUE, now(), $7, FALSE, TRUE)
+           RETURNING id, phone, email, company_name, tier, approved, must_change_password, created_at`,
+          [phone, passwordHash, email, companyName, address, repName, t]));
+      } catch (e) {
+        if (e.code === '23505') return res.status(409).json({ error: 'PHONE_EXISTS', message: '이미 가입된 번호입니다.' });
+        throw e;
+      }
+      db.query(`INSERT INTO behavior_events (user_id, phone, event_type, detail) VALUES ($1, $2, 'register', $3)`,
+        [rows[0].id, phone, JSON.stringify({ createdByAdmin: true, by: admin.via === 'erp' ? `erp:${admin.erpUserId}` : `site:${admin.id || ''}`, tier: t, email, address })]).catch(() => {});
+      return res.status(201).json({ user: rows[0], tempPassword: pw });
+    }
+
+    // v8.9 — 고객에게 새 임시 비밀번호 발급 (분실했거나 아직 로그인 전). 관리자·직원 계정은 여기서 하지 않는다.
+    if (action === 'issueTempPassword') {
+      const { rows: tg } = await db.query('SELECT id, phone, is_admin, is_staff FROM users WHERE id = $1', [userId]);
+      if (!tg[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      if (tg[0].is_admin || tg[0].is_staff) return res.status(400).json({ error: 'NOT_CUSTOMER', message: '관리자·직원 계정은 여기서 바꾸지 않습니다.' });
+      const pw = tempPassword();
+      const hash = await bcrypt.hash(pw, 10);
+      // 비밀번호 바꾸기 + 이 고객의 기존 로그인 모두 끊기(관리자 비밀번호 변경과 같게)를 한 번에 — 중간에 실패하면 둘 다 안 바뀜
+      const client = await db.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE id = $2', [hash, userId]);
+        await client.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+      return res.json({ user: { id: tg[0].id, phone: tg[0].phone }, tempPassword: pw });
     }
 
     // 직원 계정 새로 만들기 (관리자 화면 "직원 추가") — 휴대폰 번호 로그인, 처음 비밀번호 000000,

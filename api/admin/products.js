@@ -1,5 +1,6 @@
 // api/admin/products.js
 const db = require('../../lib/db');
+const { shopIndex, searchShop, handleFromUrl } = require('../../lib/shopDetail');
 const { getUserFromToken, getBearerToken } = require('../../lib/auth');
 
 function setCors(res) {
@@ -62,6 +63,24 @@ module.exports = async (req, res) => {
   try {
     if (req.method === 'GET' && req.query.action === 'seed') {
       return await seedFromBundledFiles(res);
+    }
+
+    // v8.9 — premium-k.com(샵) 상품 찾기: 상품 화면에서 '상세 페이지 주소'를 채울 때
+    if (req.method === 'GET' && req.query.action === 'shopSearch') {
+      const list = await shopIndex();
+      return res.json({ results: searchShop(list, String(req.query.q || '').slice(0, 200)) });
+    }
+    // v8.9 — 연결 점검: 상품마다 연결된 샵 상품이 지금 샵에 공개돼 있는지
+    if (req.method === 'GET' && req.query.action === 'shopLinks') {
+      const list = await shopIndex();
+      const live = new Map(list.map((p) => [String(p.handle).toLowerCase(), p]));
+      const { rows } = await db.query(`SELECT id, sku, cat, name_ko, name_en, url FROM products WHERE cat <> 'TOGO SOLUTION' ORDER BY cat, sort_order, name_ko`);
+      return res.json({ products: rows.map((r) => {
+        const h = handleFromUrl(r.url);
+        const shop = h ? live.get(h) : null;
+        return { id: r.id, sku: r.sku, cat: r.cat, nameKo: r.name_ko, nameEn: r.name_en, url: r.url || null,
+          status: !r.url ? 'none' : !h ? 'other_site' : shop ? 'ok' : 'not_in_shop', shopTitle: shop ? shop.title : null };
+      }) });
     }
 
     if (req.method === 'GET') {
