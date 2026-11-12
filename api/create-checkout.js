@@ -25,7 +25,7 @@ const { fulfillmentInfo, PICKUP_NOTICE } = require('../lib/fulfillment');
 
 const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
 // v8.10 — 샵 접속 토큰·결제 링크 지우기는 lib/shopifyAdmin.js 로 옮김 (주문 취소에서도 같이 씀)
-const { API_VERSION, getShopifyAccessToken, deleteDraftOrder } = require('../lib/shopifyAdmin');
+const { API_VERSION, getShopifyAccessToken, deleteDraftOrder, orderTag } = require('../lib/shopifyAdmin');
 
 // Shopify Draft Order 하나를 만들고 { id, invoiceUrl } 를 돌려준다. 실패하면 throw.
 async function createDraftOrder(accessToken, input) {
@@ -174,7 +174,10 @@ module.exports = async (req, res) => {
       info && info.pickup ? { key: 'Pickup notice', value: PICKUP_NOTICE } : null,
       order.rep_name ? { key: 'Sales rep', value: String(order.rep_name) } : null,
     ].filter(Boolean);
-    const tags = ['site-order'].concat(order.delivery_method ? [String(order.delivery_method).replace(/_/g, '-')] : []);
+    // v8.10 — so-<주문 번호>: 주문을 취소할 때 이 주문의 결제 링크만 정확히 찾아 닫기 위한 표시 (만들 수 없으면 빼고 예전처럼)
+    let soTag = null;
+    try { soTag = orderTag(order.id); } catch { soTag = null; }
+    const tags = ['site-order'].concat(soTag ? [soTag] : []).concat(order.delivery_method ? [String(order.delivery_method).replace(/_/g, '-')] : []);
     const credit = round2(order.staff_credit_applied || 0);
     const base = {
       taxExempt: true, // 도매 거래 — Sales Tax 부과하지 않음
@@ -201,6 +204,7 @@ module.exports = async (req, res) => {
     attempts.push({ mode: 'legacy', input: {
       lineItems: [{ title: lumpTitle, originalUnitPrice: numericAmount.toFixed(2), quantity: 1, taxable: false }],
       taxExempt: true, email: user.email || undefined, note: order.customer_name ? `Customer: ${order.customer_name}` : undefined,
+      tags: soTag ? [soTag] : undefined,   // v8.10 — 취소 때 이 링크를 찾을 수 있게 (예전 방식 그대로 + 표시 하나)
     } });
 
     let invoiceUrl = null, draftId = null, mode = null, lastErr = null;
@@ -214,7 +218,9 @@ module.exports = async (req, res) => {
     if (!invoiceUrl) throw lastErr || new Error('Draft order failed');
 
     // v8.10 — 결제 링크를 만드는 사이에 ERP에서 주문이 취소됐으면, 방금 만든 링크를 지우고 결제를 막는다
-    const { rows: latest } = await db.query(`SELECT COALESCE(to_jsonb(orders.*) ->> 'status', 'active') AS status FROM orders WHERE id = $1`, [order.id]);
+    //   (확인이 DB 오류로 실패하면 예전처럼 결제 링크를 그대로 준다 — 이미 만든 링크를 버리지 않게)
+    const latest = await db.query(`SELECT COALESCE(to_jsonb(orders.*) ->> 'status', 'active') AS status FROM orders WHERE id = $1`, [order.id])
+      .then((r) => r.rows).catch((e) => { console.error('[create-checkout] re-check failed:', e.message); return []; });
     if (latest[0] && latest[0].status === 'cancelled') {
       await deleteDraftOrder(accessToken, draftId).catch((e) => console.error('[create-checkout] cancelled order draft not deleted:', e.message));
       return res.status(400).json({ error: 'ORDER_CANCELLED', message: 'This order was cancelled. 취소된 주문입니다.' });
