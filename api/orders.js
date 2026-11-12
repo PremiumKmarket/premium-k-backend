@@ -129,9 +129,10 @@ module.exports = async (req, res) => {
       if (!admin) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 주문을 취소할 수 있습니다.' });
       const b = req.body || {};
       const by = admin.via === 'erp' ? `ERP:${admin.erpUserId}${admin.name ? ' ' + admin.name : ''}` : `site:${admin.phone || admin.id}`;
-      const r = await cancelOrder(db, { orderId: b.orderId, reason: b.reason, note: b.note, by });
+      const r = await cancelOrder(db, { orderId: b.orderId, invoiceNumber: b.invoiceNumber, reason: b.reason, note: typeof b.note === 'string' ? b.note : null, by });
       if (!r.ok) return res.status(r.status).json({ error: r.error, message: r.message });
-      console.log('[order-cancel]', JSON.stringify({ orderId: String(b.orderId), reason: b.reason, by, already: r.alreadyCancelled, creditReturned: r.creditReturned }));
+      console.log('[order-cancel]', JSON.stringify({ orderId: String(b.orderId || ''), invoice: r.invoiceNumber, reason: b.reason, by, already: r.alreadyCancelled,
+        creditReturned: r.creditReturned, shop: { checked: r.shop.checked, paid: r.shop.paid.length, closed: r.shop.closed.length, unmatched: r.shop.unmatched, error: r.shop.error || null } }));
       return res.json(r);
     } catch (err) {
       console.error('[order-cancel]', err.message);

@@ -24,28 +24,10 @@ const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const { fulfillmentInfo, PICKUP_NOTICE } = require('../lib/fulfillment');
 
 const fetchFn = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
+// v8.10 — 샵 접속 토큰·결제 링크 지우기는 lib/shopifyAdmin.js 로 옮김 (주문 취소에서도 같이 씀)
+const { API_VERSION, getShopifyAccessToken, deleteDraftOrder } = require('../lib/shopifyAdmin');
 
-const API_VERSION = '2026-07';
-
-async function getShopifyAccessToken() {
-  const { SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET } = process.env;
-  const res = await fetchFn(`https://${SHOPIFY_STORE_DOMAIN}/admin/oauth/access_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: SHOPIFY_CLIENT_ID,
-      client_secret: SHOPIFY_CLIENT_SECRET,
-      grant_type: 'client_credentials',
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.access_token) {
-    throw new Error('Failed to get Shopify access token: ' + JSON.stringify(data));
-  }
-  return data.access_token;
-}
-
-// Shopify Draft Order 하나를 만들고 결제 링크(invoiceUrl)를 돌려준다. 실패하면 throw.
+// Shopify Draft Order 하나를 만들고 { id, invoiceUrl } 를 돌려준다. 실패하면 throw.
 async function createDraftOrder(accessToken, input) {
   const { SHOPIFY_STORE_DOMAIN } = process.env;
   const mutation = `
@@ -81,9 +63,9 @@ async function createDraftOrder(accessToken, input) {
   if (errors && errors.length) {
     throw fail('Shopify draft order error: ' + errors.map((x) => String((x && x.message) || '').slice(0, 160)).join(' | '), true);
   }
-  const invoiceUrl = data?.data?.draftOrderCreate?.draftOrder?.invoiceUrl;
-  if (!invoiceUrl) throw fail('No invoice URL returned', false);
-  return invoiceUrl;
+  const draft = data?.data?.draftOrderCreate?.draftOrder;
+  if (!draft || !draft.invoiceUrl) throw fail('No invoice URL returned', false);
+  return { id: draft.id, invoiceUrl: draft.invoiceUrl };
 }
 
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
@@ -221,15 +203,22 @@ module.exports = async (req, res) => {
       taxExempt: true, email: user.email || undefined, note: order.customer_name ? `Customer: ${order.customer_name}` : undefined,
     } });
 
-    let invoiceUrl = null, mode = null, lastErr = null;
+    let invoiceUrl = null, draftId = null, mode = null, lastErr = null;
     for (const a of attempts) {
-      try { invoiceUrl = await createDraftOrder(accessToken, a.input); mode = a.mode; break; }
+      try { const d = await createDraftOrder(accessToken, a.input); invoiceUrl = d.invoiceUrl; draftId = d.id; mode = a.mode; break; }
       catch (e) {
         lastErr = e; console.error(`[create-checkout] ${a.mode} draft failed:`, e.message);
         if (!e.rejected) break;   // 결과가 불확실하면 더 만들지 않음
       }
     }
     if (!invoiceUrl) throw lastErr || new Error('Draft order failed');
+
+    // v8.10 — 결제 링크를 만드는 사이에 ERP에서 주문이 취소됐으면, 방금 만든 링크를 지우고 결제를 막는다
+    const { rows: latest } = await db.query(`SELECT COALESCE(to_jsonb(orders.*) ->> 'status', 'active') AS status FROM orders WHERE id = $1`, [order.id]);
+    if (latest[0] && latest[0].status === 'cancelled') {
+      await deleteDraftOrder(accessToken, draftId).catch((e) => console.error('[create-checkout] cancelled order draft not deleted:', e.message));
+      return res.status(400).json({ error: 'ORDER_CANCELLED', message: 'This order was cancelled. 취소된 주문입니다.' });
+    }
 
     // 나중에 대조할 수 있도록, 이 주문에 결제 페이지가 만들어졌다는 기록을 남깁니다.
     await db.query(

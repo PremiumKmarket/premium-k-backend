@@ -9,6 +9,7 @@
 //        -> { userId, makeStaff: true|false } — 기존 계정 직원 지정/해제
 //        -> { action:'erpStaffSync', expected, includeDeactivate } — ERP 직원 명단 반영
 // GET ?action=erpStaffPreview — ERP 직원 명단과 맞춰 본 미리보기 (변경 없음)
+// GET ?id=<회원번호> — 회원 한 명만 (v8.10, ERP 고객 연락처 보기)
 // DELETE -> { userId } — permanently delete a user account
 //
 // v2.5 — ERP "Site Order 관리" 메뉴에서도 같은 API를 쓴다 (lib/adminAuth.js: 서버 간 비밀키 + ERP 사용자 역할).
@@ -83,6 +84,15 @@ async function handler(req, res) {
     } catch (e) {
       return res.status(502).json({ error: e.code || 'ERP_ERROR', message: e.message });
     }
+  }
+
+  // v8.10 — 한 사람만 (ERP 신규주문알림의 고객 연락처 보기). 전체 목록·활동 기록 계산 없이 그 회원만 돌려준다.
+  if (req.method === 'GET' && req.query.id !== undefined) {
+    const id = String(req.query.id);
+    if (!/^[0-9A-Za-z-]{1,64}$/.test(id)) return res.status(400).json({ error: 'INVALID_ID', message: '회원 번호가 올바르지 않습니다.' });
+    const { rows } = await db.query(
+      `SELECT id, phone, email, company_name, address, rep_name, tier, approved, is_staff, created_at FROM users WHERE id::text = $1`, [id]);
+    return res.json({ users: rows });
   }
 
   if (req.method === 'GET') {
