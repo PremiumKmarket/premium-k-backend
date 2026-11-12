@@ -156,11 +156,14 @@ module.exports = async (req, res) => {
     // 금액/주문번호는 요청에서 절대 받지 않고, 이미 서버가 가격을 매겨 저장해둔
     // 주문 레코드에서만 읽습니다. 본인 소유 주문인지도 확인합니다.
     const { rows } = await db.query(
-      `SELECT id, invoice_number, total, amount_due, staff_credit_applied, customer_name, phone, address, rep_name, delivery_method, items FROM orders WHERE id = $1 AND user_id = $2`,
+      `SELECT id, invoice_number, total, amount_due, staff_credit_applied, customer_name, phone, address, rep_name, delivery_method, items,
+              COALESCE(to_jsonb(orders.*) ->> 'status', 'active') AS status FROM orders WHERE id = $1 AND user_id = $2`,
       [orderId, user.id]
     );
     const order = rows[0];
     if (!order) return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'Order not found. 주문을 찾을 수 없습니다.' });
+    // v8.10 — 취소된 주문은 결제 페이지를 만들지 않는다
+    if (order.status === 'cancelled') return res.status(400).json({ error: 'ORDER_CANCELLED', message: 'This order was cancelled. 취소된 주문입니다.' });
 
     // 결제할 금액 = 합계 − 직원 크레딧 (예전 주문은 amount_due가 없으므로 합계 그대로)
     const numericAmount = Number(order.amount_due !== null && order.amount_due !== undefined ? order.amount_due : order.total);

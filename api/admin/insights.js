@@ -6,6 +6,7 @@
 // C-Level·Director·Sales·Accountant 모두 볼 수 있다 (영업사원은 모든 거래처 실적 조회 — 회사 결정).
 
 const db = require('../../lib/db');
+const { NOT_CANCELLED } = require('../../lib/orderCancel');   // v8.10 취소된 주문은 매출·인센티브에서 뺀다
 const { resolveAdmin } = require('../../lib/adminAuth');
 const { applyTierPricing } = require('../../lib/pricing');
 
@@ -162,7 +163,7 @@ module.exports = async (req, res) => {
     SELECT phone, max(customer_name) AS customer_name,
            count(*) AS order_count, COALESCE(sum(total), 0) AS total_spent
     FROM orders
-    WHERE phone IS NOT NULL
+    WHERE phone IS NOT NULL AND ${NOT_CANCELLED()}
     GROUP BY phone
     ORDER BY total_spent DESC
     LIMIT 100
@@ -174,7 +175,7 @@ module.exports = async (req, res) => {
            count(*) AS order_count,
            COALESCE(sum(total), 0) AS total_sales
     FROM orders
-    WHERE created_at > now() - interval '12 months'
+    WHERE created_at > now() - interval '12 months' AND ${NOT_CANCELLED()}
     GROUP BY month
     ORDER BY month ASC
   `);
@@ -191,7 +192,7 @@ module.exports = async (req, res) => {
            count(*) AS order_count,
            COALESCE(sum(total), 0) AS total_sales
     FROM orders
-    WHERE rep_name IS NOT NULL AND rep_name <> ''
+    WHERE rep_name IS NOT NULL AND rep_name <> '' AND ${NOT_CANCELLED()}
     GROUP BY rep_name, month
     ORDER BY month DESC, total_sales DESC
   `);

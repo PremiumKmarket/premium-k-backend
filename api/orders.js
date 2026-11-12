@@ -12,6 +12,8 @@ const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const { applyTierPricing, DEFAULT_TIER } = require('../lib/pricing');
 const { creditStatus, round2 } = require('../lib/staffCredit');
 const { pushNewOrder } = require('../lib/erpOrders');
+const { resolveAdmin } = require('../lib/adminAuth');
+const { cancelOrder } = require('../lib/orderCancel');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -119,13 +121,32 @@ module.exports = async (req, res) => {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // v8.10 — 주문 취소: ERP "신규주문알림"에서 취소하면 ERP 서버가 서버 간 비밀키로 부른다(또는 Site Order 관리자).
+  // 고객은 이 경로로 취소할 수 없다.
+  if (req.method === 'POST' && req.query.action === 'cancel') {
+    try {
+      const admin = await resolveAdmin(req);
+      if (!admin) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 주문을 취소할 수 있습니다.' });
+      const b = req.body || {};
+      const by = admin.via === 'erp' ? `ERP:${admin.erpUserId}${admin.name ? ' ' + admin.name : ''}` : `site:${admin.phone || admin.id}`;
+      const r = await cancelOrder(db, { orderId: b.orderId, reason: b.reason, note: b.note, by });
+      if (!r.ok) return res.status(r.status).json({ error: r.error, message: r.message });
+      console.log('[order-cancel]', JSON.stringify({ orderId: String(b.orderId), reason: b.reason, by, already: r.alreadyCancelled, creditReturned: r.creditReturned }));
+      return res.json(r);
+    } catch (err) {
+      console.error('[order-cancel]', err.message);
+      return res.status(500).json({ error: 'SERVER_ERROR', message: '주문 취소 중 오류가 발생했습니다.' });
+    }
+  }
+
   if (req.method === 'GET') {
     const user = await getUserFromToken(getBearerToken(req));
     if (!user) return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Login required. 로그인이 필요합니다.' });
     const { rows } = await db.query(
       `SELECT id, invoice_number, customer_name, address, rep_name, delivery_method, payment_method, items, total, order_text, created_at,
-              staff_credit_applied, COALESCE(amount_due, total) AS amount_due
-       FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
+              staff_credit_applied, COALESCE(amount_due, total) AS amount_due,
+              COALESCE(to_jsonb(o.*) ->> 'status', 'active') AS status, to_jsonb(o.*) ->> 'cancelled_at' AS cancelled_at
+       FROM orders o WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
       [user.id]
     );
     // 직원 계정이면 이번 달 크레딧 현황을 함께 돌려줌 (화면 상단 표시용)
