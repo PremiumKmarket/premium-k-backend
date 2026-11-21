@@ -1,4 +1,6 @@
 // api/admin/products.js
+// v8.12 — ERP 자동 연동 관리(action=erpSync*): 상태 보기·미리보기·일괄 맞추기·자동 켜기/끄기·지금 실행·되돌리기
+//   보기(상태·미리보기는 읽기만) = 관리자 보기 권한 / 반영·켜기·끄기·실행·되돌리기 = 바꾸기 권한(C-Level·Director·사이트 관리자)
 // v8.11 — ERP "Site Order 관리"에서도 상품을 볼·추가·수정·삭제할 수 있게 함 (lib/adminAuth.js: 서버 간 비밀키 + ERP 사용자 역할).
 //   보기 = Site Order 관리자 · ERP C-Level·Director·Sales·Accountant
 //   추가·수정·삭제 = Site Order 관리자 · ERP C-Level·Director
@@ -6,6 +8,7 @@
 //   ERP 경로로 들어온 추가·수정은 값 검사를 더 엄격하게 한다(SKU·이름 길이, 가격 0 이상, 그림은 data:image 또는 https 주소, 600KB 이하).
 const db = require('../../lib/db');
 const { resolveAdmin } = require('../../lib/adminAuth');
+const auto = require('../../lib/erpCatalogAuto');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -95,6 +98,58 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // ── v8.12 ERP 자동 연동 관리 ──
+    if (req.method === 'GET' && req.query.action === 'erpSyncStatus') {
+      return res.json(await auto.getStatus(db));
+    }
+    if (req.method === 'GET' && req.query.action === 'erpSyncPreview') {
+      const data = await auto.fetchCatalog({ timeoutMs: 15000 });
+      const p = await auto.preview(db, data);
+      const full = req.query.full === '1';
+      const lim = (a) => (full ? a : a.slice(0, 40));
+      return res.json({
+        erpCount: data.items.length, erpGeneratedAt: data.generated_at, summary: auto.planSummary(p),
+        add: lim(p.add.add.map(({ row, catWhy }) => ({ ...row, catWhy }))),
+        addReview: lim(p.add.review.map((r) => ({ sku: r.sku, why: r.why, nameKo: r.item && r.item.nameKo, nameEn: r.item && r.item.nameEn }))),
+        update: lim(p.upd.update.map((u) => ({ sku: u.sku, before: u.before, after: u.after, changes: u.changes }))),
+        updateReview: lim(p.upd.review.map((r) => ({ sku: r.sku, why: r.why, before: r.before, after: r.after }))),
+      });
+    }
+    if (req.method === 'POST' && req.body && typeof req.body.action === 'string' && req.body.action.startsWith('erpSync')) {
+      const b = req.body;
+      if (b.action === 'erpSyncApply') {
+        if (!Number.isInteger(b.expectAdd) || !Number.isInteger(b.expectUpdate) || !/^[0-9a-f]{12}$/.test(String(b.plan || ''))) {
+          return res.status(400).json({ error: 'BAD_REQUEST', message: '미리보기의 추가 수·가격 반영 수·목록 지문을 함께 보내야 합니다.' });
+        }
+        const data = await auto.fetchCatalog({ timeoutMs: 15000 });
+        try {
+          const r = await auto.applyBulk(db, data, { expectAdd: b.expectAdd, expectUpdate: b.expectUpdate, plan: b.plan, enableAuto: b.enableAuto !== false });
+          console.log(`[erp-sync] bulk ${r.batch} added ${r.added.length} updated ${r.updated.length} via ${admin.via}${admin.erpUserId ? ' erp user ' + admin.erpUserId : ''}`);
+          return res.json({ batch: r.batch, added: r.added.length, updated: r.updated.length, autoEnabled: r.autoEnabled });
+        } catch (err) {
+          if (err && err.status === 409) return res.status(409).json({ error: 'PLAN_CHANGED', message: err.message });
+          throw err;
+        }
+      }
+      if (b.action === 'erpSyncAuto') {
+        const v = await auto.setAuto(db, b.enabled === true);
+        if (v === null) return res.status(409).json({ error: 'NOT_SET', message: '아직 일괄 맞추기를 하지 않았습니다.' });
+        console.log(`[erp-sync] auto ${v ? 'on' : 'off'} via ${admin.via}${admin.erpUserId ? ' erp user ' + admin.erpUserId : ''}`);
+        return res.json({ enabled: v });
+      }
+      if (b.action === 'erpSyncRun') {
+        const r = await auto.maybeAutoSync(db, { force: true, timeoutMs: 15000 });
+        return res.json({ ...r, status: await auto.getStatus(db) });
+      }
+      if (b.action === 'erpSyncRollback') {
+        if (!/^(bulk|auto)-[0-9T]+-[0-9a-f]{4}$/.test(String(b.batch || ''))) return res.status(400).json({ error: 'BAD_REQUEST', message: '되돌릴 차례(batch) 이름이 올바르지 않습니다.' });
+        const r = await auto.rollbackBatch(db, b.batch, { apply: b.apply === true });
+        if (r.apply) console.log(`[erp-sync] rollback ${b.batch} deleted ${r.deleted} restored ${r.restored} via ${admin.via}`);
+        return res.json(r);
+      }
+      return res.status(400).json({ error: 'BAD_REQUEST', message: '알 수 없는 작업입니다.' });
+    }
+
     if (req.method === 'GET' && req.query.action === 'seed') {
       if (admin.via !== 'site') return res.status(403).json({ error: 'FORBIDDEN', message: 'Site Order 관리자 화면에서만 할 수 있습니다.' });
       return await seedFromBundledFiles(res);
@@ -106,7 +161,8 @@ module.exports = async (req, res) => {
       const params = [];
       if (cat) { params.push(cat); sql += ` AND cat = $${params.length}`; }
       if (search) { params.push(`%${search}%`); sql += ` AND (name_ko ILIKE $${params.length} OR name_en ILIKE $${params.length} OR sku ILIKE $${params.length})`; }
-      sql += ' ORDER BY cat, sort_order, name_ko LIMIT 500';
+      // v8.12 — ERP 상품 일괄 맞추기로 500개를 넘으므로 한도를 올림(그전에는 뒤쪽 분류 상품이 관리자 화면에서 빠졌다)
+      sql += ' ORDER BY cat, sort_order, name_ko LIMIT 3000';
       const [{ rows }, { rows: imgRows }] = await Promise.all([
         db.query(sql, params),
         db.query('SELECT page_number, img FROM togo_page_images'),
@@ -166,6 +222,8 @@ module.exports = async (req, res) => {
       const { id } = req.body || {};
       if (!id) return res.status(400).json({ error: 'MISSING_ID' });
       const del = await db.query('DELETE FROM products WHERE id = $1 RETURNING sku', [id]);
+      // v8.12 — 자동 연동이 지운 상품을 다시 넣지 않게 기록(일괄 맞추기 전이면 아무것도 안 함)
+      if (del.rows[0]) await auto.recordSiteDelete(db, del.rows[0].sku, id);
       if (del.rows[0]) console.log(`[admin products] delete ${del.rows[0].sku} #${id} via ${admin.via}${admin.erpUserId ? ' erp user ' + admin.erpUserId : ''}`);
       return res.status(204).end();
     }

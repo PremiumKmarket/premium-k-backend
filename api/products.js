@@ -10,6 +10,20 @@
 const { getUserFromToken, getBearerToken } = require('../lib/auth');
 const db = require('../lib/db');
 const { applyTierPricingToAll, DEFAULT_TIER } = require('../lib/pricing');
+const { maybeAutoSync } = require('../lib/erpCatalogAuto');
+
+// v8.12 — ERP → 주문 사이트 자동 연동(lib/erpCatalogAuto.js: 신상품 추가 + 가격 반영). 실제 ERP 조회는 10분에 한 번(DB 상태 줄로 판단)이고,
+// 그 판단 쿼리도 서버 한 대당 1분에 한 번만 한다. 일괄 맞추기 전(상태 표 없음)이나 꺼져 있으면 아무것도 하지 않는다.
+// 실패해도 상품 목록 응답에는 영향이 없고, 어떤 경우에도 상품 목록을 6초 넘게 붙잡지 않는다.
+let nextAutoSyncCheck = 0;
+function autoSyncTick() {
+  const now = Date.now();
+  if (now < nextAutoSyncCheck) return Promise.resolve(null);
+  nextAutoSyncCheck = now + 60 * 1000;
+  let timer;
+  const deadline = new Promise((resolve) => { timer = setTimeout(() => resolve(null), 6000); });
+  return Promise.race([maybeAutoSync(db).catch(() => null), deadline]).finally(() => clearTimeout(timer));
+}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -50,6 +64,9 @@ module.exports = async (req, res) => {
         [user ? user.id : null, user ? user.phone : null, deviceId]
       ).catch(() => {});
     }
+
+    // 자동 연동을 먼저 끝내고 목록을 읽는다 — 이번에 들어간 신상품·바뀐 가격이 이 응답에 바로 보이게(ERP 조회는 최대 3초, 10분에 한 번)
+    await autoSyncTick();
 
     const [{ rows: productRows }, { rows: imgRows }] = await Promise.all([
       db.query('SELECT * FROM products ORDER BY cat, sort_order, name_ko'),
