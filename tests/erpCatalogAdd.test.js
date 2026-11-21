@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { planAddNew, planDigest, stripPack, cleanText, nonProductReason, suggestCategory, learnWords, SITE_CATS } = require('../lib/erpCatalogAdd');
 
-const item = (sku, nameKo, nameEn, extra = {}) => ({ sku, removed: false, nameKo, nameEn, cat: null, spec: null, ctnQty: 10, ctnPrice: 100, price: 12, piecePrice: 11, updatedAt: '2026-11-07 10:00:00.123456+00', ...extra });
+const item = (sku, nameKo, nameEn, extra = {}) => ({ sku, removed: false, nameKo, nameEn, cat: null, spec: null, ctnQty: 10, ctnPrice: 100, price: 12, piecePrice: null, updatedAt: '2026-11-07 10:00:00.123456+00', ...extra });
 const site = [
   { sku: 'THFZSF0001', cat: '수산물/건어물', name_ko: '백골뱅이', name_en: 'Whelk', ctn_qty: 24 },
   { sku: 'THRTSA0001', cat: '양념/스낵', name_ko: '쌈장', name_en: 'Ssamjang', ctn_qty: 12 },
